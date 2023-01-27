@@ -60,7 +60,7 @@ namespace
     void affine_bgs_visibility_actions_scene(bn::sprite_text_generator& text_generator)
     {
         constexpr bn::string_view info_text_lines[] = {
-            "START: go to next scene",
+            "START: go to next scene!",
         };
 
         common::info info("Affine BGs visibility actions", info_text_lines, text_generator);
