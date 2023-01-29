@@ -23,6 +23,9 @@
 #include "bn_affine_bg_items_bg_soft.h"
 #include "bn_regular_bg_items_lvl0.h"
 
+#include "bn_music_items.h"
+#include "bn_sound_items.h"
+
 #include "bn_blending.h"
 #include "bn_bgs_mosaic.h"
 #include "bn_rect_window.h"
@@ -123,7 +126,7 @@ namespace
                 bg_collision_tile_at(x, y, bg, 2)==1 ||
                 bg_collision_tile_at(x, y, bg, 3)==1 ||
                 bg_collision_tile_at(x, y, bg, 4)==1 ||
-                bg_collision_tile_at(x, y, bg, 5)==1);
+                bg_collision_tile_at(x, y, bg, 4)==1);
     }
 
     void update_camera_check_edge(bn::camera_ptr camera, bn::sprite_ptr sprite, bn::regular_bg_ptr bg)
@@ -150,12 +153,17 @@ namespace
     void sprite_move(bn::sprite_ptr& sprite, bn::camera_ptr camera, bn::fixed& speed_x, bn::fixed& speed_y, 
                     bn::fixed& maxspeed, bn::fixed& acceleration, bn::regular_bg_ptr bg, char& pj_state, char& camera_state) {
        
-       if(bn::keypad::left_held()) {
+        bool left_collision = (lvl0_collisions(sprite.x()+speed_x, sprite.y(), bg)==1);
+        bool right_collision = (lvl0_collisions(sprite.x()+speed_x, sprite.y(), bg)==1);
+        bool up_collision = (lvl0_collisions(sprite.x(), sprite.y()+speed_y, bg)==1);
+        bool down_collision = (lvl0_collisions(sprite.x(), sprite.y()+speed_y, bg)==1);
+
+        if(bn::keypad::left_held() && !left_collision) {
             if(speed_x >= -maxspeed) speed_x -= acceleration;
             if(speed_x <= -maxspeed) speed_x += acceleration;
              if(speed_x < 0) sprite.set_horizontal_flip(true);
         } 
-        else if(bn::keypad::right_held()) {
+        else if(bn::keypad::right_held() && !right_collision) {
             if(speed_x <= maxspeed) speed_x += acceleration;
             if(speed_x >= maxspeed) speed_x -= acceleration;
             if(speed_x > 0) sprite.set_horizontal_flip(false);
@@ -166,11 +174,11 @@ namespace
             if(speed_x > 0)
                 speed_x -= acceleration;
         }
-        if(bn::keypad::up_held()) {
+        if(bn::keypad::up_held() && !up_collision) {
             if(speed_y >= -maxspeed) speed_y -= acceleration;
             if(speed_y <= -maxspeed) speed_y += acceleration;
         }
-        else if(bn::keypad::down_held()) {
+        else if(bn::keypad::down_held() && !down_collision) {
             if(speed_y <= maxspeed) speed_y += acceleration;
             if(speed_y >= maxspeed) speed_y -= acceleration;
         }
@@ -181,22 +189,25 @@ namespace
             if(speed_y > 0) 
                 speed_y -= acceleration;
         }
-        
-        bool left_collision = (lvl0_collisions(sprite.x()+speed_x*2-8, sprite.y(), bg)==1);
-        bool right_collision = (lvl0_collisions(sprite.x()+speed_x*2+8, sprite.y(), bg)==1);
-        bool up_collision = (lvl0_collisions(sprite.x(), sprite.y()+speed_y*2-8, bg)==1);
-        bool down_collision = (lvl0_collisions(sprite.x(), sprite.y()+speed_y*2+8, bg)==1);
 
         if(left_collision || right_collision) {
             speed_x = -speed_x;
             if(pj_state == PJ_STATE_EATING) {
                 camera_state = CAMERA_RUMBLE;
+                bn::sound_items::choc.play(abs(speed_x/maxspeed));
+            }
+            else{
+                bn::sound_items::boing.play(1);
             }
         }
         if(up_collision || down_collision) {
             speed_y = -speed_y;
             if(pj_state == PJ_STATE_EATING) {
                 camera_state = CAMERA_RUMBLE;
+                bn::sound_items::choc.play(abs(speed_y/maxspeed));
+            }
+            else{
+                bn::sound_items::boing.play(1);
             }
         }
 
@@ -268,6 +279,8 @@ int main()
     pj.set_camera(camera);
     lvl0.set_camera(camera);
 
+    bn::music_items::music.play(1);
+
     while(true)
     {
 
@@ -300,6 +313,8 @@ int main()
             pj_action = pj_set_animation(pj, PJ_ANIMATION_EAT, 64);
             pj_state = PJ_STATE_EATING;
             eating_timer = 0;
+
+            bn::sound_items::grunting.play(1);
         }
 
         pj_action.update();
@@ -307,12 +322,12 @@ int main()
         update_affine_background(base_degrees_angle, attributes, attributes_hbe);
         
         text_sprites.clear();
-        text_generator.generate(0, -40, bn::to_string<32>(get_bgtile_at_pos(pj.x(),pj.y(),lvl0)), text_sprites);
+        text_generator.generate(0, -40, bn::to_string<32>(lvl0.dimensions().width()), text_sprites);
         text_generator.generate(0, 40, bn::to_string<32>(speed_x), text_sprites);
         text_generator.generate(0, -70, bn::to_string<32>(lvl0_collisions(pj.x(),pj.y(),lvl0)), text_sprites);
         
-        text_generator.generate(-110, -70, bn::to_string<32>(pj.x().round_integer()), text_sprites);
-        text_generator.generate(-80, -70, bn::to_string<32>(pj.y().round_integer()), text_sprites);
+        //text_generator.generate(-110, -70, bn::to_string<32>(pj.x().round_integer()), text_sprites);
+        //text_generator.generate(-80, -70, bn::to_string<32>(pj.y().round_integer()), text_sprites);
 
         update_camera_check_edge(camera, pj, lvl0); //warning put just before bn::core:update()
 
