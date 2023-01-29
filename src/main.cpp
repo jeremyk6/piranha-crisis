@@ -43,57 +43,19 @@
 #include "bn_vector.h"
 #include "bn_string.h"
 
+/* 
+    State flags for the player
+    0x00 = standing
+    0x01 = eating
+*/
+#define PJ_STATE_STANDING   0x00
+#define PJ_STATE_EATING     0x01
+#define PJ_EATING_ANIMATION_DELAY 100
+#define CAMERA_NORMAL 0
+#define CAMERA_RUMBLE 1
+
 namespace
 {   
-    void sprite_move(bn::sprite_ptr& sprite, bn::camera_ptr camera, float& accel_x, float& accel_y) {
-        /*
-        if(bn::keypad::left_held()) {
-            sprite.set_x(sprite.x() - 1);
-            sprite.set_horizontal_flip(true);
-            camera.set_x(camera.x() - 1);
-        } 
-        else if(bn::keypad::right_held()) {
-            sprite.set_x(sprite.x() + 1);
-            sprite.set_horizontal_flip(false);
-            camera.set_x(camera.x() + 1);
-        }   
-        if(bn::keypad::up_held()) {
-            sprite.set_y(sprite.y() - 1);
-            camera.set_y(camera.y() - 1);
-        }
-        else if(bn::keypad::down_held()) {
-            sprite.set_y(sprite.y() + 1);
-            camera.set_y(camera.y() + 1);
-        }
-        */
-       if(bn::keypad::left_held()) {
-            if(accel_x >= -1) accel_x -= 0.1;
-        } 
-        else if(bn::keypad::right_held()) {
-            if(accel_x <= 1) accel_x += 0.1;
-        }
-        else {
-            if(accel_x < 0) accel_x += 0.1;
-            if(accel_x > 0) accel_x -= 0.1;
-        }
-        if(bn::keypad::up_held()) {
-            if(accel_y >= -1) accel_y -= 0.05;
-        }
-        else if(bn::keypad::down_held()) {
-            if(accel_y <= 1) accel_y += 0.1;
-        }
-        else {
-            if(accel_y < 0) accel_y += 0.05;
-            if(accel_y > 0) accel_y -= 0.1;
-        }
-
-        sprite.set_x(sprite.x() + 1 * accel_x);
-        sprite.set_horizontal_flip(false);
-        camera.set_x(camera.x() + 1 * accel_x);
-        sprite.set_y(sprite.y() + 1 * accel_y);
-        camera.set_y(camera.y() + 1 * accel_y);
-    }
-
     /*
     * Sprite animations
     */
@@ -126,17 +88,89 @@ namespace
         }
         attributes_hbe.reload_attributes_ref(); 
     }
-
-    bn::fixed modulo(bn::fixed a, bn::fixed m)
-    {
-        return a - m * ((a/m).right_shift_integer());
-    }
     
-    bn::fixed get_map_index(bn::fixed x, bn::fixed y, bn::fixed pixel_bg_wh)
+    bn::fixed get_map_index(bn::fixed x, bn::fixed y, bn::fixed pixel_bg_wh) 
     {
-        // N_tile = (((x+map/2)/8 (int) + ((y+map/2)/8 (int) * 32))
-        //return modulo((y.safe_division(8).right_shift_integer() * map_size/8 + x.safe_division(8).integer()), map_size*8);
         return ((x+(pixel_bg_wh/2))/8).integer() + (((y+(pixel_bg_wh/2))/8).integer()*32);
+    }
+
+    bn::fixed get_bgtile_at_pos(bn::fixed x, bn::fixed y, bn::regular_bg_ptr bg) 
+    {
+        bn::fixed current_cell = get_map_index(x, y, bg.dimensions().width());
+        return bg.map().cells_ref().value().at(current_cell.integer());
+    }
+
+    bn::fixed bg_collision_tile_at(bn::fixed x, bn::fixed y, bn::regular_bg_ptr bg, bn::fixed query_cell)
+    {
+        return (get_bgtile_at_pos(x,y,bg)==query_cell);
+    }
+
+    bn::fixed lvl0_collisions(bn::fixed x, bn::fixed y, bn::regular_bg_ptr bg)
+    {
+        return (bg_collision_tile_at(x, y, bg, 1)==1 ||
+                bg_collision_tile_at(x, y, bg, 2)==1 ||
+                bg_collision_tile_at(x, y, bg, 3)==1 ||
+                bg_collision_tile_at(x, y, bg, 4)==1 ||
+                bg_collision_tile_at(x, y, bg, 5)==1);
+    }
+
+    void sprite_move(bn::sprite_ptr& sprite, bn::camera_ptr camera, bn::fixed& speed_x, bn::fixed& speed_y, 
+                    bn::fixed& maxspeed, bn::fixed& acceleration, bn::regular_bg_ptr bg, char& pj_state, char& camera_state) {
+       
+       if(bn::keypad::left_held()) {
+            if(speed_x >= -maxspeed) speed_x -= acceleration;
+            if(speed_x <= -maxspeed) speed_x += acceleration;
+             if(speed_x < 0) sprite.set_horizontal_flip(true);
+        } 
+        else if(bn::keypad::right_held()) {
+            if(speed_x <= maxspeed) speed_x += acceleration;
+            if(speed_x >= maxspeed) speed_x -= acceleration;
+            if(speed_x > 0) sprite.set_horizontal_flip(false);
+        }
+        else {
+            if(speed_x < 0)
+                speed_x += acceleration;
+            if(speed_x > 0)
+                speed_x -= acceleration;
+        }
+        if(bn::keypad::up_held()) {
+            if(speed_y >= -maxspeed) speed_y -= acceleration;
+            if(speed_y <= -maxspeed) speed_y += acceleration;
+        }
+        else if(bn::keypad::down_held()) {
+            if(speed_y <= maxspeed) speed_y += acceleration;
+            if(speed_y >= maxspeed) speed_y -= acceleration;
+        }
+        else {
+            if(speed_y < 0) 
+                speed_y += acceleration;
+
+            if(speed_y > 0) 
+                speed_y -= acceleration;
+        }
+        
+        bool left_collision = (lvl0_collisions(sprite.x()+speed_x*2-8, sprite.y(), bg)==1);
+        bool right_collision = (lvl0_collisions(sprite.x()+speed_x*2+8, sprite.y(), bg)==1);
+        bool up_collision = (lvl0_collisions(sprite.x(), sprite.y()+speed_y*2-8, bg)==1);
+        bool down_collision = (lvl0_collisions(sprite.x(), sprite.y()+speed_y*2+8, bg)==1);
+
+        if(left_collision || right_collision) {
+            speed_x = -speed_x;
+            if(pj_state == PJ_STATE_EATING) {
+                camera_state = CAMERA_RUMBLE;
+            }
+        }
+        if(up_collision || down_collision) {
+            speed_y = -speed_y;
+            if(pj_state == PJ_STATE_EATING) {
+                camera_state = CAMERA_RUMBLE;
+            }
+        }
+
+        sprite.set_x(sprite.x() + speed_x);
+        camera.set_x(camera.x() + speed_x);
+        sprite.set_y(sprite.y() + speed_y);
+        camera.set_y(camera.y() + speed_y);
     }
 }
 
@@ -145,7 +179,7 @@ int main()
     bn::core::init();
 
     /*
-        Create and init regular??? background
+        Create and init regular background
     */
     bn::regular_bg_ptr lvl0 = bn::regular_bg_items::lvl0.create_bg(0, 0);
 
@@ -182,34 +216,45 @@ int main()
     bn::sprite_text_generator text_generator(common::variable_8x16_sprite_font);
     text_generator.set_center_alignment();
     bn::vector<bn::sprite_ptr, 32> text_sprites;
-    float accel_x = 0;
-    float accel_y = 0;
-    
-    /* 
-        State flags for the player
-        0x00 = standing
-        0x01 = eating
-    */
-    #define PJ_STATE_STANDING   0x00
-    #define PJ_STATE_EATING     0x01
-    #define PJ_EATING_ANIMATION_DELAY 100
+    bn::fixed speed_x = 0;
+    bn::fixed speed_y = 0;
+    bn::fixed acceleration = 0.03;
+    bn::fixed maxspeed = acceleration*50;
 
     char pj_state = PJ_STATE_STANDING;
     int eating_timer = 0;
     
     bn::fixed current_cell;
 
+    int camera_rumble_index = 0;
+    bn::fixed rumble_amplitude = 3;
+    bn::fixed camera_rumble[] = {-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude};
+    char camera_state = CAMERA_NORMAL;
+
+    pj.set_camera(camera);
+    lvl0.set_camera(camera);
+
     while(true)
     {
-        sprite_move(pj, camera, accel_x, accel_y);
-        pj.set_camera(camera);
-        lvl0.set_camera(camera);
 
+        if(camera_state == CAMERA_RUMBLE){
+            camera.set_position(camera.x()+camera_rumble[camera_rumble_index], camera.y()+camera_rumble[camera_rumble_index]);
+            camera_rumble_index++;
+            if(camera_rumble_index > (sizeof(camera_rumble) / sizeof(bn::fixed))-1) {
+                camera_state = CAMERA_NORMAL;
+                camera_rumble_index = 0;
+            }
+        }
+
+        sprite_move(pj, camera, speed_x, speed_y, maxspeed, acceleration, lvl0, pj_state, camera_state);
+        
         if(pj_state == PJ_STATE_STANDING) {
+            maxspeed = acceleration*50;
             pj_action.update();
         }
 
         if(pj_state == PJ_STATE_EATING) {
+            maxspeed = acceleration*80;
             eating_timer++;
             if(eating_timer >= PJ_EATING_ANIMATION_DELAY) {
                 pj_action = pj_set_animation(pj, PJ_ANIMATION_STAND, 64);
@@ -227,14 +272,10 @@ int main()
 
         update_affine_background(base_degrees_angle, attributes, attributes_hbe);
         
-        
-        /*
-        Get cells
-        */
-        current_cell = get_map_index(pj.x(), pj.y(), 256); //256 = mapsize
         text_sprites.clear();
-        text_generator.generate(0, -40, bn::to_string<32>(lvl0.map().cells_ref().value().at(current_cell.integer())), text_sprites);
-        //text_generator.generate(0, -40, bn::to_string<32>(get_map_index(pj.x(), pj.y(), 256)), text_sprites);
+        text_generator.generate(0, -40, bn::to_string<32>(get_bgtile_at_pos(pj.x(),pj.y(),lvl0)), text_sprites);
+        text_generator.generate(0, 40, bn::to_string<32>(speed_x), text_sprites);
+        text_generator.generate(0, -70, bn::to_string<32>(lvl0_collisions(pj.x(),pj.y(),lvl0)), text_sprites);
 
         bn::core::update();
     }
