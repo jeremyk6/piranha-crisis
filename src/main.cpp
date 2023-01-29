@@ -43,6 +43,9 @@
 #include "bn_vector.h"
 #include "bn_string.h"
 
+#define GBA_SCREEN_WIDTH 240
+#define GBA_SCREEN_HEIGHT 160
+
 /* 
     State flags for the player
     0x00 = standing
@@ -53,6 +56,15 @@
 #define PJ_EATING_ANIMATION_DELAY 100
 #define CAMERA_NORMAL 0
 #define CAMERA_RUMBLE 1
+
+/* 
+    To reduce the display of the background if necessary (areas to be hidden)
+    Good for hide collision tiles that are put in the upper left corner
+*/
+#define CAM_OFFSET_LEFT_CORNER 0
+#define CAM_OFFSET_RIGHT_CORNER 0
+#define CAM_OFFSET_UP_CORNER 0
+#define CAM_OFFSET_DOWN_CORNER 0
 
 namespace
 {   
@@ -69,7 +81,7 @@ namespace
         }
 
         return(bn::create_sprite_animate_action_forever(
-            pj, speed, bn::sprite_items::pj.tiles_item(), 0, 3));
+            pj, speed, bn::sprite_items::pj.tiles_item(), 0, 1, 2, 3));
     }
 
     void update_affine_background(bn::fixed& base_degrees_angle, bn::affine_bg_mat_attributes attributes[], bn::affine_bg_mat_attributes_hbe_ptr& attributes_hbe) {
@@ -112,6 +124,27 @@ namespace
                 bg_collision_tile_at(x, y, bg, 3)==1 ||
                 bg_collision_tile_at(x, y, bg, 4)==1 ||
                 bg_collision_tile_at(x, y, bg, 5)==1);
+    }
+
+    void update_camera_check_edge(bn::camera_ptr camera, bn::sprite_ptr sprite, bn::regular_bg_ptr bg)
+    {
+        if ((sprite.x().round_integer()+bg.dimensions().width()/2) < GBA_SCREEN_WIDTH/2+CAM_OFFSET_LEFT_CORNER) //LEFT CORNER
+        {
+            camera.set_x(GBA_SCREEN_WIDTH/2-bg.dimensions().width()/2+CAM_OFFSET_LEFT_CORNER);
+        }
+        if ((sprite.x().round_integer()+bg.dimensions().width()/2) > bg.dimensions().width()-GBA_SCREEN_WIDTH/2-CAM_OFFSET_RIGHT_CORNER) //RIGHT CORNER
+        {
+            camera.set_x((bg.dimensions().width()-GBA_SCREEN_WIDTH/2)-bg.dimensions().width()/2-CAM_OFFSET_RIGHT_CORNER);
+        }
+
+        if ((sprite.y().round_integer()+bg.dimensions().height()/2) < GBA_SCREEN_HEIGHT/2+CAM_OFFSET_UP_CORNER) //UP CORNER
+        {
+            camera.set_y(GBA_SCREEN_HEIGHT/2-bg.dimensions().height()/2+CAM_OFFSET_UP_CORNER);
+        }
+        if ((sprite.y().round_integer()+bg.dimensions().height()/2) > bg.dimensions().height()-GBA_SCREEN_HEIGHT/2-CAM_OFFSET_DOWN_CORNER) //DOWN CORNER
+        {
+            camera.set_y((bg.dimensions().height()-GBA_SCREEN_HEIGHT/2)-bg.dimensions().height()/2-CAM_OFFSET_DOWN_CORNER);
+        } 
     }
 
     void sprite_move(bn::sprite_ptr& sprite, bn::camera_ptr camera, bn::fixed& speed_x, bn::fixed& speed_y, 
@@ -182,6 +215,7 @@ int main()
         Create and init regular background
     */
     bn::regular_bg_ptr lvl0 = bn::regular_bg_items::lvl0.create_bg(0, 0);
+    //lvl0.put_above(); //To put above sprite !
 
     bn::camera_ptr camera = bn::camera_ptr::create(0, 0);
 
@@ -226,7 +260,7 @@ int main()
     
     bn::fixed current_cell;
 
-    int camera_rumble_index = 0;
+    unsigned int camera_rumble_index = 0;
     bn::fixed rumble_amplitude = 3;
     bn::fixed camera_rumble[] = {-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude};
     char camera_state = CAMERA_NORMAL;
@@ -276,6 +310,11 @@ int main()
         text_generator.generate(0, -40, bn::to_string<32>(get_bgtile_at_pos(pj.x(),pj.y(),lvl0)), text_sprites);
         text_generator.generate(0, 40, bn::to_string<32>(speed_x), text_sprites);
         text_generator.generate(0, -70, bn::to_string<32>(lvl0_collisions(pj.x(),pj.y(),lvl0)), text_sprites);
+        
+        text_generator.generate(-110, -70, bn::to_string<32>(pj.x().round_integer()), text_sprites);
+        text_generator.generate(-80, -70, bn::to_string<32>(pj.y().round_integer()), text_sprites);
+
+        update_camera_check_edge(camera, pj, lvl0); //warning put just before bn::core:update()
 
         bn::core::update();
     }
