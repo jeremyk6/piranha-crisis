@@ -106,7 +106,7 @@ namespace
     
     bn::fixed get_map_index(bn::fixed x, bn::fixed y, bn::fixed pixel_bg_wh) 
     {
-        return ((x+(pixel_bg_wh/2))/8).integer() + (((y+(pixel_bg_wh/2))/8).integer()*32);
+        return ((x+(pixel_bg_wh/2))/8).integer() + (((y+(pixel_bg_wh/2))/8).integer()*(pixel_bg_wh/8));
     }
 
     bn::fixed get_bgtile_at_pos(bn::fixed x, bn::fixed y, bn::regular_bg_ptr bg) 
@@ -125,7 +125,6 @@ namespace
         return (bg_collision_tile_at(x, y, bg, 1)==1 ||
                 bg_collision_tile_at(x, y, bg, 2)==1 ||
                 bg_collision_tile_at(x, y, bg, 3)==1 ||
-                bg_collision_tile_at(x, y, bg, 4)==1 ||
                 bg_collision_tile_at(x, y, bg, 4)==1);
     }
 
@@ -225,7 +224,7 @@ int main()
     /*
         Create and init regular background
     */
-    bn::regular_bg_ptr lvl0 = bn::regular_bg_items::lvl0.create_bg(0, 0);
+    bn::regular_bg_ptr lvl0 = bn::regular_bg_items::lvl0.create_bg(512, 512);
     //lvl0.put_above(); //To put above sprite !
 
     bn::camera_ptr camera = bn::camera_ptr::create(0, 0);
@@ -322,9 +321,9 @@ int main()
         update_affine_background(base_degrees_angle, attributes, attributes_hbe);
         
         text_sprites.clear();
-        text_generator.generate(0, -40, bn::to_string<32>(lvl0.dimensions().width()), text_sprites);
+        text_generator.generate(0, -40, bn::to_string<32>(get_map_index(pj.x(),pj.y(),lvl0.dimensions().width())), text_sprites);
         text_generator.generate(0, 40, bn::to_string<32>(speed_x), text_sprites);
-        text_generator.generate(0, -70, bn::to_string<32>(lvl0_collisions(pj.x(),pj.y(),lvl0)), text_sprites);
+        text_generator.generate(0, -70, bn::to_string<32>(get_bgtile_at_pos(pj.x(),pj.y(),lvl0)), text_sprites);
         
         //text_generator.generate(-110, -70, bn::to_string<32>(pj.x().round_integer()), text_sprites);
         //text_generator.generate(-80, -70, bn::to_string<32>(pj.y().round_integer()), text_sprites);
