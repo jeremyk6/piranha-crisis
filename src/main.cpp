@@ -103,29 +103,25 @@ namespace
         }
         attributes_hbe.reload_attributes_ref(); 
     }
-    
-    bn::fixed get_map_index(bn::fixed x, bn::fixed y, bn::fixed pixel_bg_wh) 
+
+    bn::fixed get_bgtile_at_pos(bn::fixed x, bn::fixed y, bn::regular_bg_map_item map_item) 
     {
-        return ((x+(pixel_bg_wh/2))/8).integer() + (((y+(pixel_bg_wh/2))/8).integer()*(pixel_bg_wh/8));
+        bn::fixed x_cell = x.integer() + 8*map_item.dimensions().width()/2;
+        bn::fixed y_cell = y.integer() + 8*map_item.dimensions().width()/2;
+        return map_item.cell((x_cell/8).integer(), (y_cell/8).integer());
     }
 
-    bn::fixed get_bgtile_at_pos(bn::fixed x, bn::fixed y, bn::regular_bg_ptr bg) 
+    bn::fixed bg_collision_tile_at(bn::fixed x, bn::fixed y, bn::regular_bg_map_item map_item, bn::fixed query_cell)
     {
-        bn::fixed current_cell = get_map_index(x, y, bg.dimensions().width());
-        return bg.map().cells_ref().value().at(current_cell.integer());
+        return (get_bgtile_at_pos(x,y,map_item)==query_cell);
     }
 
-    bn::fixed bg_collision_tile_at(bn::fixed x, bn::fixed y, bn::regular_bg_ptr bg, bn::fixed query_cell)
+    bn::fixed lvl0_collisions(bn::fixed x, bn::fixed y, bn::regular_bg_map_item map_item)
     {
-        return (get_bgtile_at_pos(x,y,bg)==query_cell);
-    }
-
-    bn::fixed lvl0_collisions(bn::fixed x, bn::fixed y, bn::regular_bg_ptr bg)
-    {
-        return (bg_collision_tile_at(x, y, bg, 1)==1 ||
-                bg_collision_tile_at(x, y, bg, 2)==1 ||
-                bg_collision_tile_at(x, y, bg, 3)==1 ||
-                bg_collision_tile_at(x, y, bg, 4)==1);
+        return (bg_collision_tile_at(x, y, map_item, 1)==1 ||
+                bg_collision_tile_at(x, y, map_item, 2)==1 ||
+                bg_collision_tile_at(x, y, map_item, 3)==1 ||
+                bg_collision_tile_at(x, y, map_item, 4)==1);
     }
 
     void update_camera_check_edge(bn::camera_ptr camera, bn::sprite_ptr sprite, bn::regular_bg_ptr bg)
@@ -150,12 +146,12 @@ namespace
     }
 
     void sprite_move(bn::sprite_ptr& sprite, bn::camera_ptr camera, bn::fixed& speed_x, bn::fixed& speed_y, 
-                    bn::fixed& maxspeed, bn::fixed& acceleration, bn::regular_bg_ptr bg, char& pj_state, char& camera_state) {
+                    bn::fixed& maxspeed, bn::fixed& acceleration, bn::regular_bg_map_item map_item, char& pj_state, char& camera_state) {
        
-        bool left_collision = (lvl0_collisions(sprite.x()+speed_x, sprite.y(), bg)==1);
-        bool right_collision = (lvl0_collisions(sprite.x()+speed_x, sprite.y(), bg)==1);
-        bool up_collision = (lvl0_collisions(sprite.x(), sprite.y()+speed_y, bg)==1);
-        bool down_collision = (lvl0_collisions(sprite.x(), sprite.y()+speed_y, bg)==1);
+        bool left_collision = (lvl0_collisions(sprite.x()+speed_x, sprite.y(), map_item)==1);
+        bool right_collision = (lvl0_collisions(sprite.x()+speed_x, sprite.y(), map_item)==1);
+        bool up_collision = (lvl0_collisions(sprite.x(), sprite.y()+speed_y, map_item)==1);
+        bool down_collision = (lvl0_collisions(sprite.x(), sprite.y()+speed_y, map_item)==1);
 
         if(bn::keypad::left_held() && !left_collision) {
             if(speed_x >= -maxspeed) speed_x -= acceleration;
@@ -224,8 +220,11 @@ int main()
     /*
         Create and init regular background
     */
-    bn::regular_bg_ptr lvl0 = bn::regular_bg_items::lvl0.create_bg(512, 512);
-    //lvl0.put_above(); //To put above sprite !
+    bn::regular_bg_ptr lvl0 = bn::regular_bg_items::lvl0.create_bg(0, 0);
+    
+    bn::regular_bg_map_ptr lvl0_map = bn::regular_bg_items::lvl0.create_map();
+    bn::regular_bg_map_item lvl0_map_item = bn::regular_bg_items::lvl0.map_item();
+    //lvl0.put_above(); //To put above other bg !
 
     bn::camera_ptr camera = bn::camera_ptr::create(0, 0);
 
@@ -268,7 +267,7 @@ int main()
     char pj_state = PJ_STATE_STANDING;
     int eating_timer = 0;
     
-    bn::fixed current_cell;
+    //bn::fixed current_cell;
 
     unsigned int camera_rumble_index = 0;
     bn::fixed rumble_amplitude = 3;
@@ -292,7 +291,7 @@ int main()
             }
         }
 
-        sprite_move(pj, camera, speed_x, speed_y, maxspeed, acceleration, lvl0, pj_state, camera_state);
+        sprite_move(pj, camera, speed_x, speed_y, maxspeed, acceleration, lvl0_map_item, pj_state, camera_state);
         
         if(pj_state == PJ_STATE_STANDING) {
             maxspeed = acceleration*50;
@@ -321,12 +320,12 @@ int main()
         update_affine_background(base_degrees_angle, attributes, attributes_hbe);
         
         text_sprites.clear();
-        text_generator.generate(0, -40, bn::to_string<32>(get_map_index(pj.x(),pj.y(),lvl0.dimensions().width())), text_sprites);
+        text_generator.generate(0, -40, bn::to_string<32>(lvl0_map_item.cell(61, 61)), text_sprites);
         text_generator.generate(0, 40, bn::to_string<32>(speed_x), text_sprites);
-        text_generator.generate(0, -70, bn::to_string<32>(get_bgtile_at_pos(pj.x(),pj.y(),lvl0)), text_sprites);
+        text_generator.generate(0, -70, bn::to_string<32>(get_bgtile_at_pos(pj.x(),pj.y(),lvl0_map_item)), text_sprites);
         
-        //text_generator.generate(-110, -70, bn::to_string<32>(pj.x().round_integer()), text_sprites);
-        //text_generator.generate(-80, -70, bn::to_string<32>(pj.y().round_integer()), text_sprites);
+        text_generator.generate(-110, -70, bn::to_string<32>(pj.x().integer() + 8*lvl0_map_item.dimensions().width()/2), text_sprites);
+        text_generator.generate(-80, -70, bn::to_string<32>(pj.y().integer() + 8*lvl0_map_item.dimensions().width()/2), text_sprites);
 
         update_camera_check_edge(camera, pj, lvl0); //warning put just before bn::core:update()
 
