@@ -7,9 +7,12 @@
 #include "bn_keypad.h"
 #include "bn_memory.h"
 #include "bn_colors.h"
+#include "bn_blending.h"
 #include "bn_sprite_ptr.h"
 #include "bn_sprite_actions.h"
 #include "bn_sprite_animate_actions.h"
+#include "bn_sprite_tiles_item.h"
+#include "bn_sprite_first_attributes.h"
 #include "bn_regular_bg_ptr.h"
 #include "bn_regular_bg_item.h"
 #include "bn_regular_bg_map_ptr.h"
@@ -20,6 +23,7 @@
 #include "bn_camera_actions.h"
 
 #include "bn_sprite_items_pj.h"
+#include "bn_sprite_items_spr_lifebar.h"
 #include "bn_affine_bg_items_bg_soft.h"
 #include "bn_regular_bg_items_lvl0.h"
 
@@ -164,10 +168,10 @@ namespace
             if(speed_x > 0) sprite.set_horizontal_flip(false);
         }
         else {
-            if(speed_x < 0)
-                speed_x += acceleration;
-            if(speed_x > 0)
-                speed_x -= acceleration;
+            if(speed_x < 0 && !left_collision)
+                speed_x += acceleration*1.5;
+            if(speed_x > 0 && !right_collision)
+                speed_x -= acceleration*1.5;
         }
         if(bn::keypad::up_held() && !up_collision) {
             if(speed_y >= -maxspeed) speed_y -= acceleration;
@@ -178,11 +182,11 @@ namespace
             if(speed_y >= maxspeed) speed_y -= acceleration;
         }
         else {
-            if(speed_y < 0) 
-                speed_y += acceleration;
+            if(speed_y < 0 && !down_collision) 
+                speed_y += acceleration*1.5;
 
-            if(speed_y > 0) 
-                speed_y -= acceleration;
+            if(speed_y > 0 && !up_collision) 
+                speed_y -= acceleration*1.5;
         }
 
         if(left_collision || right_collision) {
@@ -256,6 +260,8 @@ int main()
     bn::sprite_ptr pj = bn::sprite_items::pj.create_sprite(0, 0);
     bn::sprite_animate_action<4> pj_action = pj_set_animation(pj, PJ_ANIMATION_STAND, 64);
 
+    bn::sprite_ptr lifebar = bn::sprite_items::spr_lifebar.create_sprite(32-GBA_SCREEN_WIDTH/2, 32-GBA_SCREEN_HEIGHT/2);
+
     bn::sprite_text_generator text_generator(common::variable_8x16_sprite_font);
     text_generator.set_center_alignment();
     bn::vector<bn::sprite_ptr, 32> text_sprites;
@@ -266,6 +272,7 @@ int main()
 
     char pj_state = PJ_STATE_STANDING;
     int eating_timer = 0;
+    char current_life = 8; //0(min) to 8(max)
     
     //bn::fixed current_cell;
 
@@ -304,6 +311,7 @@ int main()
             if(eating_timer >= PJ_EATING_ANIMATION_DELAY) {
                 pj_action = pj_set_animation(pj, PJ_ANIMATION_STAND, 64);
                 pj_state = PJ_STATE_STANDING;
+                current_life -=1; //***********************TO BE REMOVE JUST FOR TEST
             }
         }
 
@@ -320,14 +328,15 @@ int main()
         update_affine_background(base_degrees_angle, attributes, attributes_hbe);
         
         text_sprites.clear();
-        text_generator.generate(0, -40, bn::to_string<32>(lvl0_map_item.cell(61, 61)), text_sprites);
-        text_generator.generate(0, 40, bn::to_string<32>(speed_x), text_sprites);
-        text_generator.generate(0, -70, bn::to_string<32>(get_bgtile_at_pos(pj.x(),pj.y(),lvl0_map_item)), text_sprites);
-        
-        text_generator.generate(-110, -70, bn::to_string<32>(pj.x().integer() + 8*lvl0_map_item.dimensions().width()/2), text_sprites);
-        text_generator.generate(-80, -70, bn::to_string<32>(pj.y().integer() + 8*lvl0_map_item.dimensions().width()/2), text_sprites);
+        //text_generator.generate(0, -40, bn::to_string<32>(lvl0_map_item.cell(61, 61)), text_sprites);
+        //text_generator.generate(0, 40, bn::to_string<32>(speed_x), text_sprites);
+        //text_generator.generate(0, -70, bn::to_string<32>(get_bgtile_at_pos(pj.x(),pj.y(),lvl0_map_item)), text_sprites);
+        //text_generator.generate(-110, -70, bn::to_string<32>(pj.x().integer() + 8*lvl0_map_item.dimensions().width()/2), text_sprites);
+        //text_generator.generate(-80, -70, bn::to_string<32>(pj.y().integer() + 8*lvl0_map_item.dimensions().width()/2), text_sprites);
 
         update_camera_check_edge(camera, pj, lvl0); //warning put just before bn::core:update()
+
+        lifebar.set_tiles(bn::sprite_items::spr_lifebar.tiles_item().create_tiles(current_life)); //Lifebar update
 
         bn::core::update();
     }
