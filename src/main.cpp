@@ -79,6 +79,71 @@
 #define CAM_OFFSET_UP_CORNER 0
 #define CAM_OFFSET_DOWN_CORNER 0
 
+/* 
+    FISHES CLASSES
+*/
+
+#define FISH_TYPE_NORMAL        0
+#define FISH_TYPE_SPEED         1
+#define FISH_TYPE_CONFUSION     2
+#define FISH_TYPE_DEFORMATION   3
+#define FISH_TYPE_SUPER         4
+#define FISH_BOXSIZE 16
+
+class Fish {
+    protected:
+        bn::optional<bn::sprite_ptr> sprite;
+        bn::optional<bn::sprite_animate_action<3>> animation;
+        bn::camera_ptr* camera;
+        bn::fixed speed;
+        bn::fixed init_x;
+        bn::fixed init_y;
+        bn::fixed type;
+    public:
+        bn::fixed getX() {
+            return(this->sprite->x());
+        }
+        bn::fixed getY() {
+            return(this->sprite->y());
+        }
+        bn::fixed getType() {
+            return(this->type);
+        }
+        bool collision(bn::fixed pj_x, bn::fixed pj_y) {
+            return ((pj_x > this->sprite->x()+this->camera->x() - FISH_BOXSIZE) &&
+                    (pj_x < this->sprite->x()+this->camera->x() + FISH_BOXSIZE) &&
+                    (pj_y > this->sprite->y()+this->camera->y() - FISH_BOXSIZE) &&
+                    (pj_y < this->sprite->y()+this->camera->y() + FISH_BOXSIZE));
+        }
+        void update() {
+            this->sprite->set_x(this->init_x - this->camera->x());
+            this->sprite->set_y(this->init_y - this->camera->y());
+        }
+        Fish(bn::fixed x, bn::fixed y, bn::camera_ptr& cam) {
+            this->init_x = x;
+            this->init_y = y;
+            this->camera = &cam;
+        }
+};
+
+class NormalFish : public Fish {
+    public : 
+        NormalFish(bn::fixed x, bn::fixed y, bn::camera_ptr& cam) : Fish(x, y, cam) {
+            this->sprite = bn::sprite_items::fish_normal.create_sprite(x, y);
+            this->type = FISH_TYPE_NORMAL;
+        };
+};
+
+
+class SpeedFish : public Fish {
+    public : 
+        SpeedFish(bn::fixed x, bn::fixed y, bn::camera_ptr& cam) : Fish(x, y, cam) {
+            this->sprite = bn::sprite_items::fish_speed.create_sprite(x, y);
+            this->type = FISH_TYPE_SPEED;
+        };
+};
+
+
 namespace
 {   
     /*
@@ -294,8 +359,26 @@ int main()
 
     bn::music_items::music.play(1);
 
+    #define FISH_NUMBER 10
+    Fish* fish_list[FISH_NUMBER];
+    for(int i = 0; i < FISH_NUMBER; i++) {
+        if(i % 2 == 0)
+            fish_list[i] = new NormalFish(-64, 16*i - 64, camera);
+        else
+            fish_list[i] = new SpeedFish(-64, 16*i - 64, camera);
+    }
+
     while(true)
     {
+        
+        for(int fish_index = 0; fish_index < FISH_NUMBER; fish_index++) {
+            if(fish_list[fish_index]) {
+                fish_list[fish_index]->update();
+                if(fish_list[fish_index]->collision(pj.x(), pj.y())) {
+                    delete[] fish_list[fish_index];
+                }
+            }
+        }
 
         if(camera_state == CAMERA_RUMBLE){
             camera.set_position(camera.x()+camera_rumble[camera_rumble_index], camera.y()+camera_rumble[camera_rumble_index]);
@@ -319,7 +402,6 @@ int main()
             if(eating_timer >= PJ_EATING_ANIMATION_DELAY) {
                 pj_action = pj_set_animation(pj, PJ_ANIMATION_STAND, 64);
                 pj_state = PJ_STATE_STANDING;
-                current_life -=1; //***********************TO BE REMOVE JUST FOR TEST
             }
         }
 
@@ -336,9 +418,9 @@ int main()
         update_affine_background(base_degrees_angle, attributes, attributes_hbe);
         
         text_sprites.clear();
-        //text_generator.generate(0, -40, bn::to_string<32>(lvl0_map_item.cell(61, 61)), text_sprites);
-        //text_generator.generate(0, 40, bn::to_string<32>(speed_x), text_sprites);
-        //text_generator.generate(0, -70, bn::to_string<32>(get_bgtile_at_pos(pj.x(),pj.y(),lvl0_map_item)), text_sprites);
+        //text_generator.generate(0, -40, bn::to_string<32>(pj.x()), text_sprites);
+        //text_generator.generate(0, 40, bn::to_string<32>(fish_list[0]->getX()), text_sprites);
+        //text_generator.generate(0, -70, bn::to_string<32>(collision), text_sprites);
         //text_generator.generate(-110, -70, bn::to_string<32>(pj.x().integer() + 8*lvl0_map_item.dimensions().width()/2), text_sprites);
         
 
