@@ -22,11 +22,17 @@
 #include "bn_timer.h"
 #include "bn_camera_actions.h"
 
+// Ressources
 #include "bn_sprite_items_pj.h"
 #include "bn_sprite_items_spr_lifebar.h"
+#include "bn_sprite_items_spr_counter.h"
+#include "bn_sprite_items_fish_normal.h"
+#include "bn_sprite_items_fish_speed.h"
+#include "bn_sprite_items_fish_deformation.h"
+#include "bn_sprite_items_fish_occoured.h"
+#include "bn_sprite_items_fish_confusion.h"
 #include "bn_affine_bg_items_bg_soft.h"
 #include "bn_regular_bg_items_lvl0.h"
-
 #include "bn_music_items.h"
 #include "bn_sound_items.h"
 
@@ -260,7 +266,8 @@ int main()
     bn::sprite_ptr pj = bn::sprite_items::pj.create_sprite(0, 0);
     bn::sprite_animate_action<4> pj_action = pj_set_animation(pj, PJ_ANIMATION_STAND, 64);
 
-    bn::sprite_ptr lifebar = bn::sprite_items::spr_lifebar.create_sprite(32-GBA_SCREEN_WIDTH/2, 32-GBA_SCREEN_HEIGHT/2);
+    bn::sprite_ptr lifebar = bn::sprite_items::spr_lifebar.create_sprite(16-GBA_SCREEN_WIDTH/2, 16-GBA_SCREEN_HEIGHT/2);
+    bn::sprite_ptr counter = bn::sprite_items::spr_counter.create_sprite(GBA_SCREEN_WIDTH/2-16, GBA_SCREEN_HEIGHT/2-16);
 
     bn::sprite_text_generator text_generator(common::variable_8x16_sprite_font);
     text_generator.set_center_alignment();
@@ -273,6 +280,7 @@ int main()
     char pj_state = PJ_STATE_STANDING;
     int eating_timer = 0;
     char current_life = 8; //0(min) to 8(max)
+    int fish_points = 0;
     
     //bn::fixed current_cell;
 
@@ -332,7 +340,10 @@ int main()
         //text_generator.generate(0, 40, bn::to_string<32>(speed_x), text_sprites);
         //text_generator.generate(0, -70, bn::to_string<32>(get_bgtile_at_pos(pj.x(),pj.y(),lvl0_map_item)), text_sprites);
         //text_generator.generate(-110, -70, bn::to_string<32>(pj.x().integer() + 8*lvl0_map_item.dimensions().width()/2), text_sprites);
-        //text_generator.generate(-80, -70, bn::to_string<32>(pj.y().integer() + 8*lvl0_map_item.dimensions().width()/2), text_sprites);
+        
+
+        text_generator.generate(GBA_SCREEN_WIDTH/2-8, GBA_SCREEN_HEIGHT/2-8, 
+                                bn::to_string<32>(fish_points), text_sprites);
 
         update_camera_check_edge(camera, pj, lvl0); //warning put just before bn::core:update()
 
