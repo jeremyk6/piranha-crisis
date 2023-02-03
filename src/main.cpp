@@ -448,8 +448,11 @@ int main()
         
         for(char fish_index = 0; fish_index < fish_list.size(); fish_index++) {
             fish_list.at(fish_index).update();
-            if(fish_list.at(fish_index).collision(pj.x(), pj.y())) {
+            if(fish_list.at(fish_index).collision(pj.x(), pj.y()) && pj_state == PJ_STATE_EATING) {
                 fish_list.erase(&fish_list.at(fish_index));
+                current_life+=1;
+                if(current_life > 8) current_life = 8;
+                fish_points+=1;
             }
         }
 
