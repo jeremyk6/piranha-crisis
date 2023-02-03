@@ -5,9 +5,6 @@
 
 #include "bn_core.h"
 #include "bn_keypad.h"
-#include "bn_memory.h"
-#include "bn_colors.h"
-#include "bn_blending.h"
 #include "bn_sprite_ptr.h"
 #include "bn_sprite_actions.h"
 #include "bn_sprite_animate_actions.h"
@@ -19,7 +16,6 @@
 #include "bn_regular_bg_tiles_ptr.h"
 #include "bn_regular_bg_map_cell_info.h"
 #include "bn_sprite_palette_ptr.h"
-#include "bn_timer.h"
 #include "bn_camera_actions.h"
 
 // Ressources
@@ -36,7 +32,6 @@
 #include "bn_music_items.h"
 #include "bn_sound_items.h"
 
-#include "bn_blending.h"
 #include "bn_bgs_mosaic.h"
 #include "bn_rect_window.h"
 #include "bn_affine_bg_ptr.h"
@@ -52,9 +47,10 @@
 #include "common_info.h"
 #include "common_variable_8x16_sprite_font.h"
 #include "bn_sprite_text_generator.h"
-#include "bn_string_view.h"
 #include "bn_vector.h"
 #include "bn_string.h"
+#include "bn_random.h"
+#include "bn_vector.h"
 
 #define GBA_SCREEN_WIDTH 240
 #define GBA_SCREEN_HEIGHT 160
@@ -74,10 +70,10 @@
     To reduce the display of the background if necessary (areas to be hidden)
     Good for hide collision tiles that are put in the upper left corner
 */
-#define CAM_OFFSET_LEFT_CORNER 0
-#define CAM_OFFSET_RIGHT_CORNER 0
-#define CAM_OFFSET_UP_CORNER 0
-#define CAM_OFFSET_DOWN_CORNER 0
+#define CAM_OFFSET_LEFT_LIMIT 16
+#define CAM_OFFSET_RIGHT_LIMIT 16
+#define CAM_OFFSET_UP_LIMIT 16
+#define CAM_OFFSET_DOWN_LIMIT 16
 
 /* 
     FISHES CLASSES
@@ -90,15 +86,30 @@
 #define FISH_TYPE_SUPER         4
 #define FISH_BOXSIZE 16
 
+#define DIRECTION_UP            0
+#define DIRECTION_UP_RIGHT      1
+#define DIRECTION_RIGHT         2
+#define DIRECTION_DOWN_RIGHT    3
+#define DIRECTION_DOWN          4
+#define DIRECTION_DOWN_LEFT     5
+#define DIRECTION_LEFT          6
+#define DIRECTION_UP_LEFT       7
+#define DIRECTION_NONE          8
+
 class Fish {
     protected:
         bn::optional<bn::sprite_ptr> sprite;
         bn::optional<bn::sprite_animate_action<3>> animation;
         bn::camera_ptr* camera;
         bn::fixed speed;
-        bn::fixed init_x;
-        bn::fixed init_y;
-        bn::fixed type;
+        bn::fixed x;
+        bn::fixed y;
+        bn::random* random;
+        //unsigned char type;
+        unsigned short timer_init;
+        unsigned short timer_wait;
+        unsigned short timer;
+        unsigned char direction;
     public:
         bn::fixed getX() {
             return(this->sprite->x());
@@ -106,9 +117,9 @@ class Fish {
         bn::fixed getY() {
             return(this->sprite->y());
         }
-        bn::fixed getType() {
+        /*bn::fixed getType() {
             return(this->type);
-        }
+        }*/
         bool collision(bn::fixed pj_x, bn::fixed pj_y) {
             return ((pj_x > this->sprite->x()+this->camera->x() - FISH_BOXSIZE) &&
                     (pj_x < this->sprite->x()+this->camera->x() + FISH_BOXSIZE) &&
@@ -116,31 +127,83 @@ class Fish {
                     (pj_y < this->sprite->y()+this->camera->y() + FISH_BOXSIZE));
         }
         void update() {
-            this->sprite->set_x(this->init_x - this->camera->x());
-            this->sprite->set_y(this->init_y - this->camera->y());
+            if(direction == DIRECTION_UP) {
+                this->y -= speed;
+            }
+            if(direction == DIRECTION_UP_RIGHT) {
+                this->x += speed;
+                this->y -= speed;
+            }
+            if(direction == DIRECTION_RIGHT) {
+                this->x += speed;
+            }
+            if(direction == DIRECTION_DOWN_RIGHT) {
+                this->x += speed;
+                this->y -= speed;
+            }
+            if(direction == DIRECTION_DOWN) {
+                this->y += speed;
+            }
+            if(direction == DIRECTION_DOWN_LEFT) {
+                this->x -= speed;
+                this->y += speed;
+            }
+            if(direction == DIRECTION_LEFT) {
+                this->x -= speed;
+            }
+            if(direction == DIRECTION_UP_LEFT) {
+                this->x -= speed;
+                this->y -= speed;
+            }
+
+            // Déplacement du sprite
+            this->sprite->set_x(this->x - this->camera->x());
+            this->sprite->set_y(this->y - this->camera->y());
+            
+            // Gestion du timing
+            this->timer -= 1;
+            if(this->timer == 0) {
+                if(direction == DIRECTION_NONE) {
+                    direction = random->get_int(8);
+                    timer = this->timer_init;
+                } else {
+                    direction = DIRECTION_NONE;
+                    timer = this->timer_wait;
+                }
+            }
         }
-        Fish(bn::fixed x, bn::fixed y, bn::camera_ptr& cam) {
-            this->init_x = x;
-            this->init_y = y;
+        Fish(bn::fixed init_x, bn::fixed init_y, bn::camera_ptr& cam, bn::random& rand, bn::fixed speed_value, unsigned short timer_value, unsigned short timer_wait_value) {
+            this->x = init_x;
+            this->y = init_y;
             this->camera = &cam;
+            this->random = &rand;
+            this->speed = speed_value;
+            this->timer_init = timer_value;
+            this->timer_wait = timer_wait_value;
+            this->timer = timer_value;
+            this->direction = random->get_int(8);
         }
 };
 
 class NormalFish : public Fish {
     public : 
-        NormalFish(bn::fixed x, bn::fixed y, bn::camera_ptr& cam) : Fish(x, y, cam) {
-            this->sprite = bn::sprite_items::fish_normal.create_sprite(x, y);
-            this->type = FISH_TYPE_NORMAL;
-        };
+        NormalFish(bn::fixed init_x, bn::fixed init_y, bn::camera_ptr& cam, bn::random& rand) : Fish(init_x, init_y, cam, rand, 0.5, 100, 50) {
+            this->sprite = bn::sprite_items::fish_normal.create_sprite(init_x, init_y);
+        }
+        unsigned char getType() {
+            return(FISH_TYPE_NORMAL);
+        }
 };
 
 
 class SpeedFish : public Fish {
     public : 
-        SpeedFish(bn::fixed x, bn::fixed y, bn::camera_ptr& cam) : Fish(x, y, cam) {
-            this->sprite = bn::sprite_items::fish_speed.create_sprite(x, y);
-            this->type = FISH_TYPE_SPEED;
-        };
+        SpeedFish(bn::fixed init_x, bn::fixed init_y, bn::camera_ptr& cam, bn::random& rand) : Fish(init_x, init_y, cam, rand, 1, 100, 20) {
+            this->sprite = bn::sprite_items::fish_speed.create_sprite(init_x, init_y);
+        }
+        unsigned char getType() {
+            return(FISH_TYPE_SPEED);
+        }
 };
 
 
@@ -201,22 +264,22 @@ namespace
 
     void update_camera_check_edge(bn::camera_ptr camera, bn::sprite_ptr sprite, bn::regular_bg_ptr bg)
     {
-        if ((sprite.x().round_integer()+bg.dimensions().width()/2) < GBA_SCREEN_WIDTH/2+CAM_OFFSET_LEFT_CORNER) //LEFT CORNER
+        if ((sprite.x().round_integer()+bg.dimensions().width()/2) < GBA_SCREEN_WIDTH/2+CAM_OFFSET_LEFT_LIMIT) //LEFT CORNER
         {
-            camera.set_x(GBA_SCREEN_WIDTH/2-bg.dimensions().width()/2+CAM_OFFSET_LEFT_CORNER);
+            camera.set_x(GBA_SCREEN_WIDTH/2-bg.dimensions().width()/2+CAM_OFFSET_LEFT_LIMIT);
         }
-        if ((sprite.x().round_integer()+bg.dimensions().width()/2) > bg.dimensions().width()-GBA_SCREEN_WIDTH/2-CAM_OFFSET_RIGHT_CORNER) //RIGHT CORNER
+        if ((sprite.x().round_integer()+bg.dimensions().width()/2) > bg.dimensions().width()-GBA_SCREEN_WIDTH/2-CAM_OFFSET_RIGHT_LIMIT) //RIGHT CORNER
         {
-            camera.set_x((bg.dimensions().width()-GBA_SCREEN_WIDTH/2)-bg.dimensions().width()/2-CAM_OFFSET_RIGHT_CORNER);
+            camera.set_x((bg.dimensions().width()-GBA_SCREEN_WIDTH/2)-bg.dimensions().width()/2-CAM_OFFSET_RIGHT_LIMIT);
         }
 
-        if ((sprite.y().round_integer()+bg.dimensions().height()/2) < GBA_SCREEN_HEIGHT/2+CAM_OFFSET_UP_CORNER) //UP CORNER
+        if ((sprite.y().round_integer()+bg.dimensions().height()/2) < GBA_SCREEN_HEIGHT/2+CAM_OFFSET_UP_LIMIT) //UP CORNER
         {
-            camera.set_y(GBA_SCREEN_HEIGHT/2-bg.dimensions().height()/2+CAM_OFFSET_UP_CORNER);
+            camera.set_y(GBA_SCREEN_HEIGHT/2-bg.dimensions().height()/2+CAM_OFFSET_UP_LIMIT);
         }
-        if ((sprite.y().round_integer()+bg.dimensions().height()/2) > bg.dimensions().height()-GBA_SCREEN_HEIGHT/2-CAM_OFFSET_DOWN_CORNER) //DOWN CORNER
+        if ((sprite.y().round_integer()+bg.dimensions().height()/2) > bg.dimensions().height()-GBA_SCREEN_HEIGHT/2-CAM_OFFSET_DOWN_LIMIT) //DOWN CORNER
         {
-            camera.set_y((bg.dimensions().height()-GBA_SCREEN_HEIGHT/2)-bg.dimensions().height()/2-CAM_OFFSET_DOWN_CORNER);
+            camera.set_y((bg.dimensions().height()-GBA_SCREEN_HEIGHT/2)-bg.dimensions().height()/2-CAM_OFFSET_DOWN_LIMIT);
         } 
     }
 
@@ -316,7 +379,7 @@ int main()
     const bn::affine_bg_mat_attributes& base_attributes = bg_soft_affine.mat_attributes();
     bn::affine_bg_mat_attributes attributes[bn::display::height()];
 
-    for(int index = 0, limit = bn::display::height(); index < limit; ++index) {
+    for(short index = 0, limit = bn::display::height(); index < limit; ++index) {
         attributes[index] = base_attributes;
     }
 
@@ -343,40 +406,50 @@ int main()
     bn::fixed maxspeed = acceleration*50;
 
     char pj_state = PJ_STATE_STANDING;
-    int eating_timer = 0;
-    char current_life = 8; //0(min) to 8(max)
+    short eating_timer = 0;
+
+    /* Random generator */
+    bn::random random = bn::random();
+
+    /*
+        Life bar and scoring
+    */
+    bn::fixed current_life = 8; //0(min) to 8(max)
+    bn::fixed decreaze_value = 0.25/60;
     int fish_points = 0;
     
-    //bn::fixed current_cell;
-
-    unsigned int camera_rumble_index = 0;
-    bn::fixed rumble_amplitude = 3;
+    /*
+        Camera
+    */
+    unsigned char camera_rumble_index = 0;
+    short rumble_amplitude = 3;
     bn::fixed camera_rumble[] = {-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude};
     char camera_state = CAMERA_NORMAL;
 
     pj.set_camera(camera);
     lvl0.set_camera(camera);
 
+    /*
+        Musique BG
+    */
     bn::music_items::music.play(1);
 
-    #define FISH_NUMBER 10
-    Fish* fish_list[FISH_NUMBER];
-    for(int i = 0; i < FISH_NUMBER; i++) {
+    #define FISH_NUMBER 25
+    bn::vector<Fish, FISH_NUMBER> fish_list;
+    for(char i = 0; i < FISH_NUMBER; i++) {
         if(i % 2 == 0)
-            fish_list[i] = new NormalFish(-64, 16*i - 64, camera);
+            fish_list.push_back(NormalFish(-64, -64, camera, random));
         else
-            fish_list[i] = new SpeedFish(-64, 16*i - 64, camera);
+            fish_list.push_back(SpeedFish(-64, -64, camera, random));
     }
 
     while(true)
     {
         
-        for(int fish_index = 0; fish_index < FISH_NUMBER; fish_index++) {
-            if(fish_list[fish_index]) {
-                fish_list[fish_index]->update();
-                if(fish_list[fish_index]->collision(pj.x(), pj.y())) {
-                    delete[] fish_list[fish_index];
-                }
+        for(char fish_index = 0; fish_index < fish_list.size(); fish_index++) {
+            fish_list.at(fish_index).update();
+            if(fish_list.at(fish_index).collision(pj.x(), pj.y())) {
+                fish_list.erase(&fish_list.at(fish_index));
             }
         }
 
@@ -418,7 +491,7 @@ int main()
         update_affine_background(base_degrees_angle, attributes, attributes_hbe);
         
         text_sprites.clear();
-        //text_generator.generate(0, -40, bn::to_string<32>(pj.x()), text_sprites);
+        //text_generator.generate(0, -40, bn::to_string<32>(sizeof(bn::fixed)), text_sprites);
         //text_generator.generate(0, 40, bn::to_string<32>(fish_list[0]->getX()), text_sprites);
         //text_generator.generate(0, -70, bn::to_string<32>(collision), text_sprites);
         //text_generator.generate(-110, -70, bn::to_string<32>(pj.x().integer() + 8*lvl0_map_item.dimensions().width()/2), text_sprites);
@@ -429,7 +502,8 @@ int main()
 
         update_camera_check_edge(camera, pj, lvl0); //warning put just before bn::core:update()
 
-        lifebar.set_tiles(bn::sprite_items::spr_lifebar.tiles_item().create_tiles(current_life)); //Lifebar update
+        if (current_life>0) current_life = current_life - decreaze_value; else {/*DEATH*/ }
+        lifebar.set_tiles(bn::sprite_items::spr_lifebar.tiles_item().create_tiles(current_life.round_integer())); //Lifebar update
 
         bn::core::update();
     }
