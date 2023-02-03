@@ -187,7 +187,7 @@ class Fish {
 
 class NormalFish : public Fish {
     public : 
-        NormalFish(bn::fixed init_x, bn::fixed init_y, bn::camera_ptr& cam, bn::random& rand) : Fish(init_x, init_y, cam, rand, 0.5, 100, 50) {
+        NormalFish(bn::fixed init_x, bn::fixed init_y, bn::camera_ptr& cam, bn::random& rand) : Fish(init_x, init_y, cam, rand, rand.get_fixed(0.5,1), rand.get_int(50,100), rand.get_int(50,100)) {
             this->sprite = bn::sprite_items::fish_normal.create_sprite(init_x, init_y);
         }
         unsigned char getType() {
@@ -198,7 +198,7 @@ class NormalFish : public Fish {
 
 class SpeedFish : public Fish {
     public : 
-        SpeedFish(bn::fixed init_x, bn::fixed init_y, bn::camera_ptr& cam, bn::random& rand) : Fish(init_x, init_y, cam, rand, 1, 100, 20) {
+        SpeedFish(bn::fixed init_x, bn::fixed init_y, bn::camera_ptr& cam, bn::random& rand) : Fish(init_x, init_y, cam, rand, rand.get_fixed(1.5,2), rand.get_int(50,100), rand.get_int(50,100)) {
             this->sprite = bn::sprite_items::fish_speed.create_sprite(init_x, init_y);
         }
         unsigned char getType() {
