@@ -65,6 +65,7 @@
 #define PJ_EATING_ANIMATION_DELAY 100
 #define CAMERA_NORMAL 0
 #define CAMERA_RUMBLE 1
+#define LIFE_DECREASE_VALUE 0.2/60
 
 /* 
     To reduce the display of the background if necessary (areas to be hidden)
@@ -96,158 +97,11 @@
 #define DIRECTION_UP_LEFT       7
 #define DIRECTION_NONE          8
 
-class Fish {
-    protected:
-        bn::optional<bn::sprite_ptr> sprite;
-        bn::optional<bn::sprite_animate_action<4>> animation;
-        bn::camera_ptr* camera;
-        bn::fixed speed;
-        bn::fixed x;
-        bn::fixed y;
-        bn::random* random;
-        //unsigned char type;
-        unsigned short timer_init;
-        unsigned short timer_wait;
-        unsigned short timer;
-        unsigned char direction;
-    public:
-        bn::fixed getX() {
-            return(this->sprite->x());
-        }
-        bn::fixed getY() {
-            return(this->sprite->y());
-        }
-        /*bn::fixed getType() {
-            return(this->type);
-        }*/
-        bool collision(bn::fixed pj_x, bn::fixed pj_y) {
-            return ((pj_x > this->sprite->x()+this->camera->x() - FISH_BOXSIZE) &&
-                    (pj_x < this->sprite->x()+this->camera->x() + FISH_BOXSIZE) &&
-                    (pj_y > this->sprite->y()+this->camera->y() - FISH_BOXSIZE) &&
-                    (pj_y < this->sprite->y()+this->camera->y() + FISH_BOXSIZE));
-        }
-        void update() {
-            if(direction == DIRECTION_UP) {
-                this->y -= speed;
-            }
-            if(direction == DIRECTION_UP_RIGHT) {
-                this->x += speed;
-                this->y -= speed;
-                this->sprite->set_horizontal_flip(true);
-            }
-            if(direction == DIRECTION_RIGHT) {
-                this->x += speed;
-                this->sprite->set_horizontal_flip(true);
-            }
-            if(direction == DIRECTION_DOWN_RIGHT) {
-                this->x += speed;
-                this->y -= speed;
-                this->sprite->set_horizontal_flip(true);
-            }
-            if(direction == DIRECTION_DOWN) {
-                this->y += speed;
-            }
-            if(direction == DIRECTION_DOWN_LEFT) {
-                this->x -= speed;
-                this->y += speed;
-                this->sprite->set_horizontal_flip(false);
-            }
-            if(direction == DIRECTION_LEFT) {
-                this->x -= speed;
-                this->sprite->set_horizontal_flip(false);
-            }
-            if(direction == DIRECTION_UP_LEFT) {
-                this->x -= speed;
-                this->y -= speed;
-                this->sprite->set_horizontal_flip(false);
-            }
-
-            if(direction != DIRECTION_NONE) this->animation->update();
-
-            // Déplacement du sprite
-            this->sprite->set_x(this->x - this->camera->x());
-            this->sprite->set_y(this->y - this->camera->y());
-            
-            // Gestion du timing
-            this->timer -= 1;
-            if(this->timer == 0) {
-                if(direction == DIRECTION_NONE) {
-                    direction = random->get_int(8);
-                    timer = this->timer_init;
-                } else {
-                    direction = DIRECTION_NONE;
-                    timer = this->timer_wait;
-                }
-            }
-        }
-        Fish(bn::fixed init_x, bn::fixed init_y, bn::camera_ptr& cam, bn::random& rand, bn::fixed speed_value, unsigned short timer_value, unsigned short timer_wait_value) {
-            this->x = init_x;
-            this->y = init_y;
-            this->camera = &cam;
-            this->random = &rand;
-            this->speed = speed_value;
-            this->timer_init = timer_value;
-            this->timer_wait = timer_wait_value;
-            this->timer = timer_value;
-            this->direction = random->get_int(8);
-        }
-};
-
-class NormalFish : public Fish {
-    public : 
-        NormalFish(bn::fixed init_x, bn::fixed init_y, bn::camera_ptr& cam, bn::random& rand) : Fish(init_x, init_y, cam, rand, rand.get_fixed(0.5,1), rand.get_int(50,100), rand.get_int(50,100)) {
-            this->sprite = bn::sprite_items::fish_normal.create_sprite(init_x, init_y);
-            this->animation = bn::create_sprite_animate_action_forever(*this->sprite, 4, bn::sprite_items::fish_normal.tiles_item(), 0, 1, 2, 1);
-        }
-        unsigned char getType() {
-            return(FISH_TYPE_NORMAL);
-        }
-};
-
-
-class SpeedFish : public Fish {
-    public : 
-        SpeedFish(bn::fixed init_x, bn::fixed init_y, bn::camera_ptr& cam, bn::random& rand) : Fish(init_x, init_y, cam, rand, rand.get_fixed(1.5,2), rand.get_int(50,100), rand.get_int(50,100)) {
-            this->sprite = bn::sprite_items::fish_speed.create_sprite(init_x, init_y);
-            this->animation = bn::create_sprite_animate_action_forever(*this->sprite, 4, bn::sprite_items::fish_speed.tiles_item(), 0, 1, 2, 1);
-        }
-        unsigned char getType() {
-            return(FISH_TYPE_SPEED);
-        }
-};
-
-/*
-class Player: {
-    private :
-        bn::optional<bn::sprite_ptr> sprite;
-        bn::optional<bn::sprite_animate_action<4>> animation;
-        bn::camera_ptr* camera;
-        bn::fixed speed_x;
-        bn::fixed speed_y;
-        bn::fixed acceleration;
-
-}
-*/
-
+#define PJ_ANIMATION_STAND  0
+#define PJ_ANIMATION_EAT    1
 
 namespace
 {   
-    /*
-    * Sprite animations
-    */
-
-    #define PJ_ANIMATION_STAND  0
-    #define PJ_ANIMATION_EAT    1
-    bn::sprite_animate_action<4> pj_set_animation(bn::sprite_ptr pj, char animation, char speed) {
-        if(animation == PJ_ANIMATION_EAT ){
-            return(bn::create_sprite_animate_action_forever(
-                    pj, speed, bn::sprite_items::pj.tiles_item(), 4, 5, 6, 7));
-        }
-
-        return(bn::create_sprite_animate_action_forever(
-            pj, speed, bn::sprite_items::pj.tiles_item(), 0, 1, 2, 3));
-    }
-
     void update_affine_background(bn::fixed& base_degrees_angle, bn::affine_bg_mat_attributes attributes[], bn::affine_bg_mat_attributes_hbe_ptr& attributes_hbe) {
         base_degrees_angle += 4; //"phase" (3-4)
         if(base_degrees_angle >= 360) {base_degrees_angle -= 360;}
@@ -285,107 +139,309 @@ namespace
                 bg_collision_tile_at(x, y, map_item, 4)==1);
     }
 
-    /*bn::fixed lvl0_spikes(bn::fixed x, bn::fixed y, bn::regular_bg_map_item map_item)
+    void update_camera_check_edge(bn::camera_ptr camera, bn::fixed x, bn::fixed y, bn::regular_bg_ptr bg)
     {
-        return (bg_collision_tile_at(x, y, map_item, 5)==1 ||
-                bg_collision_tile_at(x, y, map_item, 6)==1 ||
-                bg_collision_tile_at(x, y, map_item, 7)==1 ||
-                bg_collision_tile_at(x, y, map_item, 8)==1);
-    }*/
-
-    void update_camera_check_edge(bn::camera_ptr camera, bn::sprite_ptr sprite, bn::regular_bg_ptr bg)
-    {
-        if ((sprite.x().round_integer()+bg.dimensions().width()/2) < GBA_SCREEN_WIDTH/2+CAM_OFFSET_LEFT_LIMIT) //LEFT CORNER
+        if ((x.round_integer()+bg.dimensions().width()/2) < GBA_SCREEN_WIDTH/2+CAM_OFFSET_LEFT_LIMIT) //LEFT CORNER
         {
             camera.set_x(GBA_SCREEN_WIDTH/2-bg.dimensions().width()/2+CAM_OFFSET_LEFT_LIMIT);
         }
-        if ((sprite.x().round_integer()+bg.dimensions().width()/2) > bg.dimensions().width()-GBA_SCREEN_WIDTH/2-CAM_OFFSET_RIGHT_LIMIT) //RIGHT CORNER
+        if ((x.round_integer()+bg.dimensions().width()/2) > bg.dimensions().width()-GBA_SCREEN_WIDTH/2-CAM_OFFSET_RIGHT_LIMIT) //RIGHT CORNER
         {
             camera.set_x((bg.dimensions().width()-GBA_SCREEN_WIDTH/2)-bg.dimensions().width()/2-CAM_OFFSET_RIGHT_LIMIT);
         }
 
-        if ((sprite.y().round_integer()+bg.dimensions().height()/2) < GBA_SCREEN_HEIGHT/2+CAM_OFFSET_UP_LIMIT) //UP CORNER
+        if ((y.round_integer()+bg.dimensions().height()/2) < GBA_SCREEN_HEIGHT/2+CAM_OFFSET_UP_LIMIT) //UP CORNER
         {
             camera.set_y(GBA_SCREEN_HEIGHT/2-bg.dimensions().height()/2+CAM_OFFSET_UP_LIMIT);
         }
-        if ((sprite.y().round_integer()+bg.dimensions().height()/2) > bg.dimensions().height()-GBA_SCREEN_HEIGHT/2-CAM_OFFSET_DOWN_LIMIT) //DOWN CORNER
+        if ((y.round_integer()+bg.dimensions().height()/2) > bg.dimensions().height()-GBA_SCREEN_HEIGHT/2-CAM_OFFSET_DOWN_LIMIT) //DOWN CORNER
         {
             camera.set_y((bg.dimensions().height()-GBA_SCREEN_HEIGHT/2)-bg.dimensions().height()/2-CAM_OFFSET_DOWN_LIMIT);
         } 
     }
 
-    void sprite_move(bn::sprite_ptr& sprite, bn::camera_ptr camera, bn::fixed& speed_x, bn::fixed& speed_y, 
-                    bn::fixed& maxspeed, bn::fixed& acceleration, bn::regular_bg_map_item map_item, char& pj_state, char& camera_state) {
-       
-        bool left_collision = (lvl0_collisions(sprite.x()+speed_x, sprite.y(), map_item)==1);
-        bool right_collision = (lvl0_collisions(sprite.x()+speed_x, sprite.y(), map_item)==1);
-        bool up_collision = (lvl0_collisions(sprite.x(), sprite.y()+speed_y, map_item)==1);
-        bool down_collision = (lvl0_collisions(sprite.x(), sprite.y()+speed_y, map_item)==1);
-
-        if(bn::keypad::left_held() && !left_collision) {
-            if(speed_x >= -maxspeed) speed_x -= acceleration;
-            if(speed_x <= -maxspeed) speed_x += acceleration;
-             if(speed_x < 0) sprite.set_horizontal_flip(true);
-        } 
-        else if(bn::keypad::right_held() && !right_collision) {
-            if(speed_x <= maxspeed) speed_x += acceleration;
-            if(speed_x >= maxspeed) speed_x -= acceleration;
-            if(speed_x > 0) sprite.set_horizontal_flip(false);
-        }
-        else {
-            if(speed_x < 0 && !left_collision)
-                speed_x += acceleration*1.5;
-            if(speed_x > 0 && !right_collision)
-                speed_x -= acceleration*1.5;
-        }
-        if(bn::keypad::up_held() && !up_collision) {
-            if(speed_y >= -maxspeed) speed_y -= acceleration;
-            if(speed_y <= -maxspeed) speed_y += acceleration;
-        }
-        else if(bn::keypad::down_held() && !down_collision) {
-            if(speed_y <= maxspeed) speed_y += acceleration;
-            if(speed_y >= maxspeed) speed_y -= acceleration;
-        }
-        else {
-            if(speed_y < 0 && !down_collision) 
-                speed_y += acceleration*1.5;
-
-            if(speed_y > 0 && !up_collision) 
-                speed_y -= acceleration*1.5;
-        }
-
-        if(left_collision || right_collision) {
-            speed_x = -speed_x;
-            if(pj_state == PJ_STATE_EATING) {
-                camera_state = CAMERA_RUMBLE;
-                bn::sound_items::choc.play(abs(speed_x/maxspeed));
+    class Fish {
+        protected:
+            bn::optional<bn::sprite_ptr> sprite;
+            bn::optional<bn::sprite_animate_action<4>> animation;
+            bn::camera_ptr* camera;
+            bn::fixed speed;
+            bn::fixed x;
+            bn::fixed y;
+            bn::random* random;
+            //unsigned char type;
+            unsigned short timer_init;
+            unsigned short timer_wait;
+            unsigned short timer;
+            unsigned char direction;
+        public:
+            bn::fixed getX() {
+                return(this->sprite->x());
             }
-            else{
-                bn::sound_items::boing.play(1);
+            bn::fixed getY() {
+                return(this->sprite->y());
             }
-        }
-        if(up_collision || down_collision) {
-            speed_y = -speed_y;
-            if(pj_state == PJ_STATE_EATING) {
-                camera_state = CAMERA_RUMBLE;
-                bn::sound_items::choc.play(abs(speed_y/maxspeed));
+            /*bn::fixed getType() {
+                return(this->type);
+            }*/
+            bool collision(bn::fixed pj_x, bn::fixed pj_y) {
+                return ((pj_x > this->sprite->x()+this->camera->x() - FISH_BOXSIZE) &&
+                        (pj_x < this->sprite->x()+this->camera->x() + FISH_BOXSIZE) &&
+                        (pj_y > this->sprite->y()+this->camera->y() - FISH_BOXSIZE) &&
+                        (pj_y < this->sprite->y()+this->camera->y() + FISH_BOXSIZE));
             }
-            else{
-                bn::sound_items::boing.play(1);
-            }
-        }
+            void update() {
+                if(direction == DIRECTION_UP) {
+                    this->y -= speed;
+                }
+                if(direction == DIRECTION_UP_RIGHT) {
+                    this->x += speed;
+                    this->y -= speed;
+                    this->sprite->set_horizontal_flip(true);
+                }
+                if(direction == DIRECTION_RIGHT) {
+                    this->x += speed;
+                    this->sprite->set_horizontal_flip(true);
+                }
+                if(direction == DIRECTION_DOWN_RIGHT) {
+                    this->x += speed;
+                    this->y -= speed;
+                    this->sprite->set_horizontal_flip(true);
+                }
+                if(direction == DIRECTION_DOWN) {
+                    this->y += speed;
+                }
+                if(direction == DIRECTION_DOWN_LEFT) {
+                    this->x -= speed;
+                    this->y += speed;
+                    this->sprite->set_horizontal_flip(false);
+                }
+                if(direction == DIRECTION_LEFT) {
+                    this->x -= speed;
+                    this->sprite->set_horizontal_flip(false);
+                }
+                if(direction == DIRECTION_UP_LEFT) {
+                    this->x -= speed;
+                    this->y -= speed;
+                    this->sprite->set_horizontal_flip(false);
+                }
 
-        if(bg_collision_tile_at(sprite.x(), sprite.y(), map_item, 3077)==1) speed_x = -maxspeed; //left_spikes
-        if(bg_collision_tile_at(sprite.x(), sprite.y(), map_item, 5)==1) speed_x = maxspeed; //right_spikes
-        if(bg_collision_tile_at(sprite.x(), sprite.y(), map_item, 6)==1) speed_y = -maxspeed; //up_spikes
-        if(bg_collision_tile_at(sprite.x(), sprite.y(), map_item, 10)==1) speed_y = -maxspeed; //up_spikes (WTF)
-        if(bg_collision_tile_at(sprite.x(), sprite.y(), map_item, 3078)==1) speed_y = maxspeed; //down_spikes
+                if(direction != DIRECTION_NONE) this->animation->update();
 
-        sprite.set_x(sprite.x() + speed_x);
-        camera.set_x(camera.x() + speed_x);
-        sprite.set_y(sprite.y() + speed_y);
-        camera.set_y(camera.y() + speed_y);
-    }
+                // Déplacement du sprite
+                this->sprite->set_x(this->x - this->camera->x());
+                this->sprite->set_y(this->y - this->camera->y());
+                
+                // Gestion du timing
+                this->timer -= 1;
+                if(this->timer == 0) {
+                    if(direction == DIRECTION_NONE) {
+                        direction = random->get_int(8);
+                        timer = this->timer_init;
+                    } else {
+                        direction = DIRECTION_NONE;
+                        timer = this->timer_wait;
+                    }
+                }
+            }
+            Fish(bn::fixed init_x, bn::fixed init_y, bn::camera_ptr& cam, bn::random& rand, bn::fixed speed_value, unsigned short timer_value, unsigned short timer_wait_value) {
+                this->x = init_x;
+                this->y = init_y;
+                this->camera = &cam;
+                this->random = &rand;
+                this->speed = speed_value;
+                this->timer_init = timer_value;
+                this->timer_wait = timer_wait_value;
+                this->timer = timer_value;
+                this->direction = random->get_int(8);
+            }
+    };
+
+    class NormalFish : public Fish {
+        public : 
+            NormalFish(bn::fixed init_x, bn::fixed init_y, bn::camera_ptr& cam, bn::random& rand) : Fish(init_x, init_y, cam, rand, rand.get_fixed(0.5,1), rand.get_int(50,100), rand.get_int(50,100)) {
+                this->sprite = bn::sprite_items::fish_normal.create_sprite(init_x, init_y);
+                this->animation = bn::create_sprite_animate_action_forever(*this->sprite, 4, bn::sprite_items::fish_normal.tiles_item(), 0, 1, 2, 1);
+            }
+            unsigned char getType() {
+                return(FISH_TYPE_NORMAL);
+            }
+    };
+
+
+    class SpeedFish : public Fish {
+        public : 
+            SpeedFish(bn::fixed init_x, bn::fixed init_y, bn::camera_ptr& cam, bn::random& rand) : Fish(init_x, init_y, cam, rand, rand.get_fixed(1.5,2), rand.get_int(50,100), rand.get_int(50,100)) {
+                this->sprite = bn::sprite_items::fish_speed.create_sprite(init_x, init_y);
+                this->animation = bn::create_sprite_animate_action_forever(*this->sprite, 4, bn::sprite_items::fish_speed.tiles_item(), 0, 1, 2, 1);
+            }
+            unsigned char getType() {
+                return(FISH_TYPE_SPEED);
+            }
+    };
+
+    class Player {
+        private :
+            bn::optional<bn::sprite_ptr> sprite;
+            bn::optional<bn::sprite_animate_action<4>> animation;
+            bn::camera_ptr* camera;
+            char* camera_state;
+            bn::regular_bg_map_item* map_item;
+            bn::fixed speed_x;
+            bn::fixed speed_y;
+            bn::fixed acceleration;
+            bn::fixed maxspeed;
+            char state;
+            short eating_timer;
+            bn::fixed life;
+
+        public :
+            Player(bn::fixed x, bn::fixed y, bn::camera_ptr& cam, char& cam_state, bn::regular_bg_map_item& bg_map_item) {
+                this->sprite = bn::sprite_items::pj.create_sprite(x, y);
+                this->state = PJ_ANIMATION_STAND;
+                this->camera = &cam;
+                this->sprite->set_camera(cam);
+                this->camera_state = &cam_state;
+                this->map_item = &bg_map_item;
+                this->speed_x = 0;
+                this->speed_y = 0;
+                this->acceleration = 0.03;
+                this->life = 8;
+                this->setStateStand();
+            }
+            short getLife() {
+                return(this->life.round_integer());
+            }
+            void upLife() {
+                this->life = this->life.round_integer() + 1;
+                if(this->life > 8) this->life = 8;
+                bn::sound_items::eating.play(1);
+            }
+            void hurt() {
+                this->life = this->life.round_integer() - 1;
+                *this->camera_state = CAMERA_RUMBLE;
+                bn::sound_items::spike.play(1);
+            }
+            bn::fixed x() {
+                return(this->sprite->x());
+            }
+            bn::fixed y() {
+                return(this->sprite->y());
+            }
+            char getState() {
+                return(this->state);
+            }
+            void setStateStand() {
+                this->state = PJ_STATE_STANDING;
+                this->maxspeed = this->acceleration*50;
+                this->eating_timer = 0;
+                this->animation = bn::create_sprite_animate_action_forever(*this->sprite, 32, bn::sprite_items::pj.tiles_item(), 0, 1, 2, 3);
+            }
+            void setStateEat() {
+                this->state = PJ_STATE_EATING;
+                this->maxspeed = this->acceleration*80;
+                this->animation = bn::create_sprite_animate_action_forever(*this->sprite, 32, bn::sprite_items::pj.tiles_item(), 4, 5, 6, 7);
+                bn::sound_items::grunting.play(1);
+            }
+            void update() {
+                bool left_collision = (lvl0_collisions(this->sprite->x()+this->speed_x, this->sprite->y(), *this->map_item)==1);
+                bool right_collision = (lvl0_collisions(this->sprite->x()+this->speed_x, this->sprite->y(), *this->map_item)==1);
+                bool up_collision = (lvl0_collisions(this->sprite->x(), this->sprite->y()+this->speed_y, *this->map_item)==1);
+                bool down_collision = (lvl0_collisions(this->sprite->x(), this->sprite->y()+this->speed_y, *this->map_item)==1);
+
+                if(bn::keypad::left_held() && !left_collision) {
+                    if(this->speed_x >= -this->maxspeed) this->speed_x -= this->acceleration;
+                    if(this->speed_x <= -this->maxspeed) this->speed_x += this->acceleration;
+                    if(this->speed_x < 0) this->sprite->set_horizontal_flip(true);
+                } 
+                else if(bn::keypad::right_held() && !right_collision) {
+                    if(this->speed_x <= this->maxspeed) this->speed_x += this->acceleration;
+                    if(this->speed_x >= this->maxspeed) this->speed_x -= this->acceleration;
+                    if(this->speed_x > 0) this->sprite->set_horizontal_flip(false);
+                }
+                else {
+                    if(this->speed_x < 0 && !left_collision)
+                        this->speed_x += this->acceleration*1.5;
+                    if(this->speed_x > 0 && !right_collision)
+                        this->speed_x -= this->acceleration*1.5;
+                }
+                if(bn::keypad::up_held() && !up_collision) {
+                    if(this->speed_y >= -this->maxspeed) this->speed_y -= this->acceleration;
+                    if(this->speed_y <= -this->maxspeed) this->speed_y += this->acceleration;
+                }
+                else if(bn::keypad::down_held() && !down_collision) {
+                    if(this->speed_y <= this->maxspeed) this->speed_y += this->acceleration;
+                    if(this->speed_y >= this->maxspeed) this->speed_y -= this->acceleration;
+                }
+                else {
+                    if(this->speed_y < 0 && !down_collision) 
+                        this->speed_y += this->acceleration*1.5;
+
+                    if(this->speed_y > 0 && !up_collision) 
+                        this->speed_y -= this->acceleration*1.5;
+                }
+
+                if(left_collision || right_collision) {
+                    this->speed_x = -this->speed_x;
+                    if(this->state == PJ_STATE_EATING) {
+                        *this->camera_state = CAMERA_RUMBLE;
+                        bn::sound_items::choc.play(abs(this->speed_x/this->maxspeed) > 1 ? 1 : abs(this->speed_x/this->maxspeed));
+                    }
+                    else{
+                        bn::sound_items::boing.play(1);
+                    }
+                }
+                if(up_collision || down_collision) {
+                    this->speed_y = -this->speed_y;
+                    if(this->state == PJ_STATE_EATING) {
+                        *this->camera_state = CAMERA_RUMBLE;
+                        bn::sound_items::choc.play(abs(this->speed_y/this->maxspeed) > 1 ? 1 : abs(this->speed_y/this->maxspeed));
+                    }
+                    else{
+                        bn::sound_items::boing.play(1);
+                    }
+                }
+
+                //Spikes collision
+                if(bg_collision_tile_at(this->sprite->x(), this->sprite->y(), *this->map_item, 3077)==1) {
+                    this->speed_x = -this->maxspeed; //left_spikes
+                    this->hurt();
+                }
+                if(bg_collision_tile_at(this->sprite->x(), this->sprite->y(), *this->map_item, 5)==1) {
+                    this->speed_x = this->maxspeed; //right_spikes
+                    this->hurt();
+                }
+                if(bg_collision_tile_at(this->sprite->x(), this->sprite->y(), *this->map_item, 6)==1) {
+                    this->speed_y = -this->maxspeed; //up_spikes
+                    this->hurt();
+                }
+                if(bg_collision_tile_at(this->sprite->x(), this->sprite->y(), *this->map_item, 10)==1) {
+                    this->speed_y = -this->maxspeed; //up_spikes (WTF)
+                    this->hurt();
+                }
+                if(bg_collision_tile_at(this->sprite->x(), this->sprite->y(), *this->map_item, 3078)==1) {
+                    this->speed_y = this->maxspeed; //down_spikes
+                    this->hurt();
+                }
+
+                this->sprite->set_x(this->sprite->x() + this->speed_x);
+                this->camera->set_x(this->camera->x() + this->speed_x);
+                this->sprite->set_y(this->sprite->y() + this->speed_y);
+                this->camera->set_y(this->camera->y() + this->speed_y);
+
+                if(this->state == PJ_STATE_EATING) {
+                    this->eating_timer += 1;
+                    if(this->eating_timer >= PJ_EATING_ANIMATION_DELAY) {
+                        this->setStateStand();
+                    }
+                }
+
+                this->animation->update();
+
+                if (this->life>0) this->life -= LIFE_DECREASE_VALUE;
+                else this->life = 0;
+            }
+    };
 }
 
 int main()
@@ -428,31 +484,19 @@ int main()
     /*
         Create and init sprites
     */
-    bn::sprite_ptr pj = bn::sprite_items::pj.create_sprite(0, 0);
-    bn::sprite_animate_action<4> pj_action = pj_set_animation(pj, PJ_ANIMATION_STAND, 32);
-
     bn::sprite_ptr lifebar = bn::sprite_items::spr_lifebar.create_sprite(16-GBA_SCREEN_WIDTH/2, 16-GBA_SCREEN_HEIGHT/2);
     bn::sprite_ptr counter = bn::sprite_items::spr_counter.create_sprite(GBA_SCREEN_WIDTH/2-16, GBA_SCREEN_HEIGHT/2-16);
 
     bn::sprite_text_generator text_generator(common::variable_8x16_sprite_font);
     text_generator.set_center_alignment();
     bn::vector<bn::sprite_ptr, 32> text_sprites;
-    bn::fixed speed_x = 0;
-    bn::fixed speed_y = 0;
-    bn::fixed acceleration = 0.03;
-    bn::fixed maxspeed = acceleration*50;
-
-    char pj_state = PJ_STATE_STANDING;
-    short eating_timer = 0;
 
     /* Random generator */
     bn::random random = bn::random();
 
     /*
-        Life bar and scoring
+        Scoring
     */
-    bn::fixed current_life = 8; //0(min) to 8(max)
-    bn::fixed decreaze_value = 0.25/60;
     int fish_points = 0;
     
     /*
@@ -463,15 +507,15 @@ int main()
     bn::fixed camera_rumble[] = {-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude,-rumble_amplitude, rumble_amplitude};
     char camera_state = CAMERA_NORMAL;
 
-    pj.set_camera(camera);
+    //pj.set_camera(camera);
     lvl0.set_camera(camera);
 
     /*
         Musique BG
     */
-    bn::music_items::music.play(1);
+    bn::music_items::music.play(0.5);
 
-    #define FISH_NUMBER 25
+    #define FISH_NUMBER 50
     bn::vector<Fish, FISH_NUMBER> fish_list;
     for(char i = 0; i < FISH_NUMBER; i++) {
         if(i % 2 == 0)
@@ -480,15 +524,17 @@ int main()
             fish_list.push_back(SpeedFish(-64, -64, camera, random));
     }
 
+    Player player = Player(0, 0, camera, camera_state, lvl0_map_item);
+
     while(true)
     {
         
         for(char fish_index = 0; fish_index < fish_list.size(); fish_index++) {
             fish_list.at(fish_index).update();
-            if(fish_list.at(fish_index).collision(pj.x(), pj.y()) && pj_state == PJ_STATE_EATING) {
+            if(fish_list.at(fish_index).collision(player.x(), player.y()) && player.getState() == PJ_STATE_EATING) {
+                // Quand on avale un poisson
                 fish_list.erase(&fish_list.at(fish_index));
-                current_life+=1;
-                if(current_life > 8) current_life = 8;
+                player.upLife();
                 fish_points+=1;
             }
         }
@@ -502,35 +548,17 @@ int main()
             }
         }
 
-        sprite_move(pj, camera, speed_x, speed_y, maxspeed, acceleration, lvl0_map_item, pj_state, camera_state);
-        
-        if(pj_state == PJ_STATE_STANDING) {
-            maxspeed = acceleration*50;
+        // Passage en mode eat
+        if(bn::keypad::a_pressed() && player.getState() != PJ_STATE_EATING) {
+            player.setStateEat();
         }
 
-        if(pj_state == PJ_STATE_EATING) {
-            maxspeed = acceleration*80;
-            eating_timer++;
-            if(eating_timer >= PJ_EATING_ANIMATION_DELAY) {
-                pj_action = pj_set_animation(pj, PJ_ANIMATION_STAND, 32);
-                pj_state = PJ_STATE_STANDING;
-            }
-        }
-
-        if(bn::keypad::a_pressed()) {
-            pj_action = pj_set_animation(pj, PJ_ANIMATION_EAT, 32);
-            pj_state = PJ_STATE_EATING;
-            eating_timer = 0;
-
-            bn::sound_items::grunting.play(1);
-        }
-
-        pj_action.update();
+        player.update();
 
         update_affine_background(base_degrees_angle, attributes, attributes_hbe);
         
         text_sprites.clear();
-        text_generator.generate(0, -40, bn::to_string<32>(get_bgtile_at_pos(pj.x(),pj.y(),lvl0_map_item)), text_sprites);
+        //text_generator.generate(0, -40, bn::to_string<32>(get_bgtile_at_pos(pj.x(),pj.y(),lvl0_map_item)), text_sprites);
         //text_generator.generate(0, 40, bn::to_string<32>(fish_list[0]->getX()), text_sprites);
         //text_generator.generate(0, -70, bn::to_string<32>(collision), text_sprites);
         //text_generator.generate(-110, -70, bn::to_string<32>(pj.x().integer() + 8*lvl0_map_item.dimensions().width()/2), text_sprites);
@@ -539,10 +567,13 @@ int main()
         text_generator.generate(GBA_SCREEN_WIDTH/2-8, GBA_SCREEN_HEIGHT/2-8, 
                                 bn::to_string<32>(fish_points), text_sprites);
 
-        update_camera_check_edge(camera, pj, lvl0); //warning put just before bn::core:update()
+        update_camera_check_edge(camera, player.x(), player.y(), lvl0); //warning put just before bn::core:update()
 
-        if (current_life>0) current_life = current_life - decreaze_value; else {/*DEATH*/ }
-        lifebar.set_tiles(bn::sprite_items::spr_lifebar.tiles_item().create_tiles(current_life.round_integer())); //Lifebar update
+        lifebar.set_tiles(bn::sprite_items::spr_lifebar.tiles_item().create_tiles(player.getLife())); //Lifebar update
+
+        if(player.getLife() == 0) {
+            // GAME OVER
+        }
 
         bn::core::update();
     }
