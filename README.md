@@ -4,6 +4,9 @@
 
 Get the highest score by eating as many fish as possible before you run out of life. Eating a fish gives you a life, but also its power that may help you... Or not ! Watch out for the bones!
 
+## [Play](https://jeremyk6.github.io/piranha-crisis/)
+## [Download rom](https://github.com/jeremyk6/piranha-crisis/raw/gh-page/piranha.gba)
+
 ## Credits
 
 Game by Bugmobile & jeremyk6
