@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8"/>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <meta name="title" content="GBA-wasm"/>
+        <title>Piranha Crisis</title>
+        <link rel="stylesheet" href="./css/index.css">
+        <script id="2d-vertex-shader" type="x-shader/x-vertex">
+            attribute vec2 a_position;
+            varying highp vec2 v_textureCoord;
+            void main() {
+                /* 
+                 * This scales the quad so that the screen texture fits the viewport.
+                 * The texture is 256 * 256, but only 240 * 160 is used. The quad is 2*2, centered on (0,0)
+                 */
+                gl_Position = vec4((a_position.x * 2.0 * 1.0666) - 1.0, (a_position.y * 2.0 * 1.6) * -1.0 + 1.0, 0, 1);
+                v_textureCoord = vec2(a_position.x, a_position.y);
+            }
+        </script>
+        <script id="2d-fragment-shader" type="x-shader/x-fragment">
+            varying highp vec2 v_textureCoord;
+            uniform sampler2D u_sampler;
+            void main(void) {
+                gl_FragColor = texture2D(u_sampler, vec2(v_textureCoord.s, v_textureCoord.t));
+            }
+        </script>
+    </head>
+    <body>
+        <div class="logo"><img src="logo.png"/></div>
+        <div class="options">
+            <div class="text-centered">
+                <button id="play_btn" class="btn reset-bindings-button" onclick=loadGame();>Play</button>
+            </div>
+            <h3 class="title">How to play :</h1>
+            <div class="text">
+                Get the highest score by eating as many fish as possible before you run out of life. Eating a fish gives you a life, but also its power that may help you... Or not ! Watch out for the bones!<br/><br/>
+                Arrow keys : Move<br/>
+                Z : Eat<br/><br/>
+            </div>
+            <h3 class="title"><a class="link" href="piranha.gba">Download rom</a><br/><a class="link" href="https://github.com/jeremyk6/piranha-crisis">Source code</a></h1>
+            <h3 class="title">Credits</h3>
+            <div class="text-centered">
+                Game by Bugmobile & jeremyk6<br/><br/>
+                Made for Game Boy Advance with <a class="link" href="https://github.com/GValiente/butano">Butano</a> for the <a class="link" href="https://itch.io/jam/gdb-juice-jam-ii">Juice Jam II</a>.<br/>GBA-wasm emulator by <a class="link" href="https://github.com/kxkx5150/GBA-wasm">kxkx5150</a>.
+            </div>
+        </div>
+
+        <div class="pixels" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0;"></div>
+        <div style="display: none;" class="ui">
+            <div class="ui-border-1">
+                <div class="ui-border-2">
+                    <section class="load-rom-section">
+                    </section>
+                    <section class="paused-section" style="display: none;">
+                        <h2>Paused</h2>
+                        <p style="padding-top: 8px;">
+                            Press <span class="unpause-key-prompt"></span> to resume.
+                        </p>
+                    </section>
+                    <section class="savegames-section">
+                        <div style="display: none;" class="saves-list"></div>
+                    </section>
+                    <section>
+                        <h2>Keyboard Bindings</h2>
+                        <div class="gap"></div>
+                        <div class="keyboard-bindings"></div>
+                        <div class="gap"></div>
+                        <button class="btn reset-bindings-button" onclick="window.vbaUI.resetBindings();">Reset Bindings</button>
+                    </section>
+                </div>
+            </div>
+        </div>
+        <div class="modal" style="display: none;">
+            <div class="modal-background"></div>
+            <div class="modal-body">
+                <h2 class="modal-title">Title</h2>
+                <div class="gap"></div>
+                <p class="modal-text">Text</p>
+                <div class="gap"></div>
+                <div class="modal-progress"></div>
+                <input class="modal-input"></input>
+                <div class="modal-buttons">
+                    <div class="btn modal-button-left">Left</div>
+                    <div class="btn modal-button-right">Right</div>
+                </div>
+            </div>
+        </div>
+        <div class="toast" style="display: none;"></div>
+        <div class="perf" style="display: none;">
+            <span class="perf-left">Game</span><span class="perf-right perf-game">-</span><br/>
+            <span class="perf-left">Speed</span><span class="perf-right perf-percentage">-</span><br/>
+            <span class="perf-left">On-Time Renders</span><span class="perf-right perf-render-deadlines">-</span><br/>
+            <span class="perf-left">On-Time Audio Events</span><span class="perf-right perf-audio-deadlines">-</span><br/>
+            <span class="perf-left">Timesteps/Second</span><span class="perf-right perf-timesteps">-</span><br/>
+            <span class="perf-left">Audio Lag</span><span class="perf-right perf-audio-lag">-</span><br/>
+        </div>
+        <script src="./js/index.js"></script>
+        <script src="./app.js"></script>
+        <script src="./js/main.js"></script>
+    </body>
+</html>
+
