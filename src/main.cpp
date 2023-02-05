@@ -93,6 +93,7 @@
 #define FISH_TYPE_DEFORMATION   3
 #define FISH_TYPE_SUPER         4
 #define FISH_BOXSIZE 12
+#define SUPER_FISH_CHANCE 20
 
 #define FISH_STATE_APPEARING    0
 #define FISH_STATE_NORMAL       1
@@ -380,6 +381,8 @@ class SuperFish : public Fish {
         }
 };
 
+
+
 class Player {
     private :
         bn::optional<bn::sprite_ptr> sprite;
@@ -647,10 +650,14 @@ class Player {
 
 // cam.x() - screen_width/2 cam.x() + screen_width/2
 
-Fish createFish(bn::camera_ptr& cam, bn::random& rand, bn::regular_bg_ptr& bg_item, bn::regular_bg_map_item& map) {
-    int type = rand.get_int(5);
+Fish createFish(bn::camera_ptr& cam, bn::random& rand, bn::regular_bg_ptr& bg_item, bn::regular_bg_map_item& map, int extend) {
     bn::fixed x = rand.get_int(bg_item.dimensions().width())-bg_item.dimensions().width()/2;
     bn::fixed y = rand.get_int(bg_item.dimensions().height())-bg_item.dimensions().height()/2;
+    
+    int super = rand.get_int(SUPER_FISH_CHANCE);
+    if(super == 42) return(SuperFish(x, y, cam, rand, bg_item, map));
+
+    int type = rand.get_int(extend+1);
     switch(type) {
         case 0:
             return(NormalFish(x, y, cam, rand, bg_item, map));
@@ -663,9 +670,6 @@ Fish createFish(bn::camera_ptr& cam, bn::random& rand, bn::regular_bg_ptr& bg_it
             break;
         case 3:
             return(DeformationFish(x, y, cam, rand, bg_item, map));
-            break;
-        case 4:
-            return(SuperFish(x, y, cam, rand, bg_item, map));
             break;
         default:
             return(NormalFish(x, y, cam, rand, bg_item, map));
@@ -685,6 +689,13 @@ int game() {
     //lvl0.put_above(); //To put above other bg !
 
     bn::camera_ptr camera = bn::camera_ptr::create(0, 0);
+
+    bn::bgs_mosaic::set_stretch(0);
+    bn::blending::set_transparency_alpha(1);
+    bn::regular_bg_builder builder(bn::regular_bg_items::lvl0);
+    builder.set_blending_enabled(true);
+    builder.set_mosaic_enabled(true);
+    lvl0 = builder.build();
 
     /*
         Create and init affine background
@@ -745,18 +756,14 @@ int game() {
     */
     bn::music_items::music.play(0.5);
 
-    #define FISH_NUMBER 20
-    bn::vector<Fish, FISH_NUMBER> fish_list;
-    for(char i = 0; i < FISH_NUMBER; i++) {
-        fish_list.push_back(createFish(camera, random, lvl0, lvl0_map_item));
+    #define FISH_MAX_NUMBER 15
+    bn::vector<Fish, FISH_MAX_NUMBER> fish_list;
+    short fish_number = 5;
+    char fish_type = FISH_TYPE_NORMAL;
+    for(char i = 0; i < fish_number; i++) {
+        fish_list.push_back(createFish(camera, random, lvl0, lvl0_map_item, fish_type));
     }
    
-    bn::bgs_mosaic::set_stretch(0);
-    bn::blending::set_transparency_alpha(1);
-    bn::regular_bg_builder builder(bn::regular_bg_items::lvl0);
-    builder.set_blending_enabled(true);
-    builder.set_mosaic_enabled(true);
-    lvl0 = builder.build();
     //int a=0;
 
     Player player = Player(0, 0, camera, camera_state, lvl0_map_item, lvl0, builder, random);
@@ -802,7 +809,15 @@ int game() {
             }
             if(fish_list.at(fish_index).getState() == FISH_STATE_DEAD) {
                 fish_list.erase(&fish_list.at(fish_index));
-                fish_list.push_back(createFish(camera, random, lvl0, lvl0_map_item));
+                fish_list.push_back(createFish(camera, random, lvl0, lvl0_map_item, fish_type));
+
+                if(fish_points % 10 == 0) {
+                    if(fish_type < FISH_TYPE_DEFORMATION) fish_type++;
+                }
+                if(fish_points % 5 == 0) {
+                    if(fish_number < FISH_MAX_NUMBER) fish_number++;
+                    if(fish_list.size() < fish_number) fish_list.push_back(createFish(camera, random, lvl0, lvl0_map_item, fish_type));
+                }
             }
         }
 
@@ -817,7 +832,7 @@ int game() {
 
         text_sprites.clear();        
         
-        //text_generator.generate(0, -40, bn::to_string<32>(get_bgtile_at_pos(pj.x(),pj.y(),lvl0_map_item)), text_sprites);
+        text_generator.generate(0, -70, bn::to_string<32>(fish_list.size()), text_sprites);
         //text_generator.generate(0, 40, bn::to_string<32>(fish_list[0]->getX()), text_sprites);
         //text_generator.generate(0, -70, bn::to_string<32>(collision), text_sprites);
         //text_generator.generate(-110, -70, bn::to_string<32>(pj.x().integer() + 8*lvl0_map_item.dimensions().width()/2), text_sprites);
