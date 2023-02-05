@@ -32,6 +32,7 @@
 #include "bn_sprite_items_fish_death.h"
 #include "bn_affine_bg_items_bg_soft.h"
 #include "bn_regular_bg_items_lvl0.h"
+#include "bn_regular_bg_items_title.h"
 #include "bn_music_items.h"
 #include "bn_sound_items.h"
 
@@ -692,8 +693,6 @@ Fish createDeathFish(bn::camera_ptr& cam, bn::random& rand, bn::regular_bg_ptr& 
 }
 
 int game() {
-    bn::core::init();
-
     /*
         Create and init regular background
     */
@@ -783,7 +782,7 @@ int game() {
 
     Player player = Player(0, 0, camera, camera_state, lvl0_map_item, lvl0, builder, random);
 
-    bn::string<11> str_state = "";
+    //bn::string<11> str_state = "";
 
     while(true)
     {
@@ -795,34 +794,34 @@ int game() {
                 switch(type) {
                     case FISH_TYPE_DEFORMATION:
                         player.setFXDeformation();
-                        str_state = "DEFORMATION";
+                        //str_state = "DEFORMATION";
                         break;
                         
                     case FISH_TYPE_CONFUSION:
                         player.setFXConfused();
-                        str_state = "CONFUSION";
+                        //str_state = "CONFUSION";
                         break;
                         
                     case FISH_TYPE_SPEED:
                         player.setFXSpeed();
-                        str_state = "FULLSPEED";
+                        //str_state = "FULLSPEED";
                         break;
                         
                     case FISH_TYPE_SUPER:
                         player.setFXNormal();
                         player.setFullLife();
-                        str_state = "";
+                        //str_state = "";
                         break;
 
                     case FISH_TYPE_DEATH:
                         player.setFXNormal();
                         player.hurt(2);
-                        str_state = "";
+                        //str_state = "";
                         break;                        
                     
                     default:
                         player.setFXNormal();
-                        str_state = "";
+                        //str_state = "";
                 }
                 player.eat();
                 fish_points+=1;
@@ -857,12 +856,12 @@ int game() {
 
         text_sprites.clear();        
         
-        text_generator.generate(0, -70, bn::to_string<32>(fish_list.size()), text_sprites);
+        //text_generator.generate(0, -70, bn::to_string<32>(fish_list.size()), text_sprites);
         //text_generator.generate(0, 40, bn::to_string<32>(fish_list[0]->getX()), text_sprites);
         //text_generator.generate(0, -70, bn::to_string<32>(collision), text_sprites);
         //text_generator.generate(-110, -70, bn::to_string<32>(pj.x().integer() + 8*lvl0_map_item.dimensions().width()/2), text_sprites);
         
-        if (player.getFX()!=PJ_FX_NORMAL) text_generator.generate(0, GBA_SCREEN_HEIGHT/2-8, str_state, text_sprites);
+        //if (player.getFX()!=PJ_FX_NORMAL) text_generator.generate(0, GBA_SCREEN_HEIGHT/2-8, str_state, text_sprites);
 
         text_generator.generate(GBA_SCREEN_WIDTH/2-16, GBA_SCREEN_HEIGHT/2-8, 
                                 bn::to_string<32>(fish_points), text_sprites);
@@ -887,7 +886,164 @@ int game() {
     }
 }
 
+int title() {
+    bn::camera_ptr camera = bn::camera_ptr::create(0, 0);
+
+    /*
+        Create and init regular background
+    */
+    bn::regular_bg_ptr title_bg = bn::regular_bg_items::title.create_bg(0, 0);
+    
+    bn::regular_bg_map_ptr title_bg_map = bn::regular_bg_items::title.create_map();
+    bn::regular_bg_map_item title_bg_map_item = bn::regular_bg_items::title.map_item();
+
+    title_bg.set_priority(0);
+
+    /*
+        Create and init affine background
+    */
+    bn::affine_bg_ptr bg_soft_affine = bn::affine_bg_items::bg_soft.create_bg(0, 0);
+
+    bn::rect_window internal_window = bn::rect_window::internal();
+    internal_window.set_top_left(-(bn::display::height() / 2), -1000);
+    internal_window.set_bottom_right((bn::display::height() / 2), 1000);
+    bn::window::outside().set_show_bg(bg_soft_affine, false);
+
+    const bn::affine_bg_mat_attributes& base_attributes = bg_soft_affine.mat_attributes();
+    bn::affine_bg_mat_attributes attributes[bn::display::height()];
+
+    for(short index = 0, limit = bn::display::height(); index < limit; ++index) {
+        attributes[index] = base_attributes;
+    }
+
+    bn::affine_bg_mat_attributes_hbe_ptr attributes_hbe =
+    bn::affine_bg_mat_attributes_hbe_ptr::create(bg_soft_affine, attributes);
+
+    bn::fixed base_degrees_angle;
+
+    /*
+        Create and init sprites
+    */
+    bn::sprite_text_generator text_generator(common::variable_8x16_sprite_font);
+    text_generator.set_center_alignment();
+    bn::vector<bn::sprite_ptr, 64> text_sprites;
+
+    /*
+        Musique BG
+    */
+    bn::music_items::title.play(0.5);
+
+    bool title_screen = true;
+    int timer = 0;
+
+    /* Random generator */
+    bn::random random = bn::random();
+
+    #define TITLE_FISH_MAX_NUMBER 50
+    bn::vector<Fish, TITLE_FISH_MAX_NUMBER> fish_list;
+    char fish_type = FISH_TYPE_DEFORMATION;
+    int start_time = 60*4-32;
+
+    while(title_screen)
+    {
+        if (timer == start_time)
+        {
+            for(char i = 0; i < TITLE_FISH_MAX_NUMBER; i++) {
+            fish_list.push_back(createFish(camera, random, title_bg, title_bg_map_item, fish_type));
+            }
+        }
+        if (timer > start_time)
+        {
+            for(char fish_index = 0; fish_index < fish_list.size(); fish_index++) {
+            fish_list.at(fish_index).update();
+            }
+        }
+
+        update_affine_background(base_degrees_angle, attributes, attributes_hbe);
+
+        text_sprites.clear(); 
+
+        if (timer > 60*4)
+        {
+            if(bn::keypad::start_pressed()) {
+            title_screen = false;
+            }
+            if ((timer/32)%2==0) text_generator.generate(0, 32, "press start", text_sprites);
+        }
+        else
+        {
+            text_generator.generate(0, 0, "jeremyK6 & Bugmobile", text_sprites);
+            text_generator.generate(0, 16, "Juice Jam II - Made with Butano", text_sprites);
+        }
+        bn::core::update();
+        timer++;
+    }
+    return 0;
+}
+
+int results(int score) {
+    bn::camera_ptr camera = bn::camera_ptr::create(0, 0);
+
+    /*
+        Create and init affine background
+    */
+    bn::affine_bg_ptr bg_soft_affine = bn::affine_bg_items::bg_soft.create_bg(0, 0);
+
+    bn::rect_window internal_window = bn::rect_window::internal();
+    internal_window.set_top_left(-(bn::display::height() / 2), -1000);
+    internal_window.set_bottom_right((bn::display::height() / 2), 1000);
+    bn::window::outside().set_show_bg(bg_soft_affine, false);
+
+    const bn::affine_bg_mat_attributes& base_attributes = bg_soft_affine.mat_attributes();
+    bn::affine_bg_mat_attributes attributes[bn::display::height()];
+
+    for(short index = 0, limit = bn::display::height(); index < limit; ++index) {
+        attributes[index] = base_attributes;
+    }
+
+    bn::affine_bg_mat_attributes_hbe_ptr attributes_hbe =
+    bn::affine_bg_mat_attributes_hbe_ptr::create(bg_soft_affine, attributes);
+
+    bn::fixed base_degrees_angle;
+
+    /*
+        Create and init sprites
+    */
+    bn::sprite_text_generator text_generator(common::variable_8x16_sprite_font);
+    text_generator.set_center_alignment();
+    bn::vector<bn::sprite_ptr, 32> text_sprites;
+
+    /*
+        Musique BG
+    */
+    bn::music_items::title.play(0.5);
+
+    bool title_screen = true;
+
+    while(title_screen)
+    {
+        if(bn::keypad::start_pressed()) {
+            title_screen = false;
+        }
+
+        update_affine_background(base_degrees_angle, attributes, attributes_hbe);
+
+        text_sprites.clear(); 
+        text_generator.generate(0, -32, "SCORE :", text_sprites);
+        text_generator.generate(0, -16, bn::to_string<32>(score), text_sprites);
+        text_generator.generate(0, 32, "press start", text_sprites);
+
+        bn::core::update();
+    }
+    return 0;
+}
+
 int main()
 {
-    game();
+    bn::core::init();
+    while(1)
+    {
+        title();
+        results(game());
+    }
 }
