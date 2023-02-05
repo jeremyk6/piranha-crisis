@@ -1,6 +1,9 @@
 /*
- * Copyright (c) 2020-2022 Gustavo Valiente gustavo.valiente@protonmail.com
- * zlib License, see LICENSE file.
+ * Authors : Bugmobile & jeremyk6
+ * License : GPLv3
+ * 
+ * Based on examples by Gustavo Valiente gustavo.valiente@protonmail.com
+ * Original license : zlib License, see LICENSE file.
  */
 
 #include "bn_core.h"
