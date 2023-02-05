@@ -1016,7 +1016,7 @@ int results(int score) {
     /*
         Musique BG
     */
-    bn::music_items::title.play(0.5);
+    bn::music_items::score.play(1);
 
     bool title_screen = true;
 
