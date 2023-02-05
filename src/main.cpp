@@ -10,8 +10,10 @@
 #include "bn_sprite_animate_actions.h"
 #include "bn_sprite_tiles_item.h"
 #include "bn_sprite_first_attributes.h"
+#include "bn_sprite_builder.h"
 #include "bn_regular_bg_ptr.h"
 #include "bn_regular_bg_item.h"
+#include "bn_regular_bg_builder.h"
 #include "bn_regular_bg_map_ptr.h"
 #include "bn_regular_bg_tiles_ptr.h"
 #include "bn_regular_bg_map_cell_info.h"
@@ -33,6 +35,7 @@
 #include "bn_sound_items.h"
 
 #include "bn_bgs_mosaic.h"
+#include "bn_blending.h"
 #include "bn_rect_window.h"
 #include "bn_affine_bg_ptr.h"
 #include "bn_affine_bg_builder.h"
@@ -65,9 +68,11 @@
 #define PJ_STATE_SWALLOWING 2
 #define PJ_INVINCIBLE_DELAY 30
 #define PJ_EATING_ANIMATION_DELAY 100
+#define PJ_SWALLOW_ANIMATION_DELAY 50
 #define CAMERA_NORMAL 0
 #define CAMERA_RUMBLE 1
 #define LIFE_DECREASE_VALUE 0.2/60
+#define BG_CONFUSION_RATE 30 //30 = 0.5 sec
 
 /* 
     To reduce the display of the background if necessary (areas to be hidden)
@@ -106,6 +111,11 @@
 
 #define PJ_ANIMATION_STAND  0
 #define PJ_ANIMATION_EAT    1
+
+#define PJ_FX_NORMAL    0
+#define PJ_FX_SPEED     1
+#define PJ_FX_CONFUS    2
+#define PJ_FX_DEFORM    3
 
 
 void update_affine_background(bn::fixed& base_degrees_angle, bn::affine_bg_mat_attributes attributes[], bn::affine_bg_mat_attributes_hbe_ptr& attributes_hbe) {
@@ -195,6 +205,7 @@ class Fish {
         unsigned short timer;
         unsigned char direction;
         char state;
+        unsigned char type;
     public:
         bn::fixed getX() {
             return(this->sprite->x());
@@ -210,6 +221,9 @@ class Fish {
                     (pj_x < this->sprite->x()+this->camera->x() + FISH_BOXSIZE) &&
                     (pj_y > this->sprite->y()+this->camera->y() - FISH_BOXSIZE) &&
                     (pj_y < this->sprite->y()+this->camera->y() + FISH_BOXSIZE));
+        }
+        unsigned char getType() {
+            return(this->type);
         }
         void update() {
             if(this->state == FISH_STATE_APPEARING) {
@@ -325,9 +339,7 @@ class NormalFish : public Fish {
         NormalFish(bn::fixed init_x, bn::fixed init_y, bn::camera_ptr& cam, bn::random& rand, bn::regular_bg_ptr& bg_item, bn::regular_bg_map_item& map) : Fish(init_x, init_y, cam, rand, rand.get_fixed(0.5,1), rand.get_int(50,100), rand.get_int(50,100), bg_item, map) {
             this->sprite = bn::sprite_items::fish_normal.create_sprite(init_x, init_y);
             this->animation = bn::create_sprite_animate_action_forever(*this->sprite, 4, bn::sprite_items::fish_normal.tiles_item(), 0, 1, 2, 1);
-        }
-        unsigned char getType() {
-            return(FISH_TYPE_NORMAL);
+            this->type = FISH_TYPE_NORMAL;
         }
 };
 
@@ -337,9 +349,34 @@ class SpeedFish : public Fish {
         SpeedFish(bn::fixed init_x, bn::fixed init_y, bn::camera_ptr& cam, bn::random& rand, bn::regular_bg_ptr& bg_item, bn::regular_bg_map_item& map) : Fish(init_x, init_y, cam, rand, rand.get_fixed(1.5,2), rand.get_int(50,100), rand.get_int(50,100), bg_item, map) {
             this->sprite = bn::sprite_items::fish_speed.create_sprite(init_x, init_y);
             this->animation = bn::create_sprite_animate_action_forever(*this->sprite, 4, bn::sprite_items::fish_speed.tiles_item(), 0, 1, 2, 1);
+            this->type = FISH_TYPE_SPEED;
         }
-        unsigned char getType() {
-            return(FISH_TYPE_SPEED);
+};
+
+class ConfusionFish : public Fish {
+    public : 
+        ConfusionFish(bn::fixed init_x, bn::fixed init_y, bn::camera_ptr& cam, bn::random& rand, bn::regular_bg_ptr& bg_item, bn::regular_bg_map_item& map) : Fish(init_x, init_y, cam, rand, rand.get_fixed(0.5,1), rand.get_int(50,100), rand.get_int(50,100), bg_item, map) {
+            this->sprite = bn::sprite_items::fish_confusion.create_sprite(init_x, init_y);
+            this->animation = bn::create_sprite_animate_action_forever(*this->sprite, 4, bn::sprite_items::fish_confusion.tiles_item(), 0, 1, 2, 1);
+            this->type = FISH_TYPE_CONFUSION;
+        }
+};
+
+class DeformationFish : public Fish {
+    public : 
+        DeformationFish(bn::fixed init_x, bn::fixed init_y, bn::camera_ptr& cam, bn::random& rand, bn::regular_bg_ptr& bg_item, bn::regular_bg_map_item& map) : Fish(init_x, init_y, cam, rand, rand.get_fixed(0.3,0.6), rand.get_int(50,100), rand.get_int(50,100), bg_item, map) {
+            this->sprite = bn::sprite_items::fish_deformation.create_sprite(init_x, init_y);
+            this->animation = bn::create_sprite_animate_action_forever(*this->sprite, 4, bn::sprite_items::fish_deformation.tiles_item(), 0, 1, 2, 1);
+            this->type = FISH_TYPE_DEFORMATION;
+        }
+};
+
+class SuperFish : public Fish {
+    public : 
+        SuperFish(bn::fixed init_x, bn::fixed init_y, bn::camera_ptr& cam, bn::random& rand, bn::regular_bg_ptr& bg_item, bn::regular_bg_map_item& map) : Fish(init_x, init_y, cam, rand, rand.get_fixed(2.5, 3), rand.get_int(50,100), 0, bg_item, map) {
+            this->sprite = bn::sprite_items::fish_occoured.create_sprite(init_x, init_y);
+            this->animation = bn::create_sprite_animate_action_forever(*this->sprite, 4, bn::sprite_items::fish_occoured.tiles_item(), 0, 1, 2, 1);
+            this->type = FISH_TYPE_SUPER;
         }
 };
 
@@ -349,7 +386,10 @@ class Player {
         bn::optional<bn::sprite_animate_action<4>> animation;
         bn::camera_ptr* camera;
         char* camera_state;
+        bn::random* random;
         bn::regular_bg_map_item* map_item;
+        bn::regular_bg_builder* bg_builder;
+        bn::regular_bg_ptr* bg;
         bn::fixed speed_x;
         bn::fixed speed_y;
         bn::fixed acceleration;
@@ -361,32 +401,49 @@ class Player {
         bn::fixed life;
         bool is_hurt = false;
         short hurt_timer;
+        char effect;
+        unsigned char confus_timer;
+        void set_normal_background() {
+            bn::bgs_mosaic::set_stretch(0);
+            bn::blending::set_transparency_alpha(1);
+        }
+        void resetAcceleration() {
+            this->acceleration = 0.03;
+        }
 
     public :
-        Player(bn::fixed x, bn::fixed y, bn::camera_ptr& cam, char& cam_state, bn::regular_bg_map_item& bg_map_item) {
+        Player(bn::fixed x, bn::fixed y, bn::camera_ptr& cam, char& cam_state, bn::regular_bg_map_item& bg_map_item, bn::regular_bg_ptr& bg_ptr,bn::regular_bg_builder& builder, bn::random& rand) {
             this->sprite = bn::sprite_items::pj.create_sprite(x, y);
             this->state = PJ_ANIMATION_STAND;
             this->camera = &cam;
             this->sprite->set_camera(cam);
             this->camera_state = &cam_state;
             this->map_item = &bg_map_item;
+            this->bg = &bg_ptr;
+            this->random = &rand;
+            this->bg_builder = &builder;
             this->speed_x = 0;
             this->speed_y = 0;
             this->acceleration = 0.03;
             this->life = 8;
             this->setStateStand();
             this->hurt_timer = 0;
+            this->setFXNormal();
+            this->confus_timer = 0;
+
         }
         short getLife() {
             return(this->life.round_integer());
         }
+        void setFullLife() {
+            this->life = 8;
+        }
         void eat() {
-            this->speed_y+= 0.5;
             this->eaten = true;
             this->life = this->life.round_integer() + 1;
+            this->eating_timer = PJ_EATING_ANIMATION_DELAY;
             if(this->life > 8) this->life = 8;
             bn::sound_items::eating.play(1);
-            this->animation = bn::create_sprite_animate_action_once(*this->sprite, 8, bn::sprite_items::pj.tiles_item(), 8, 4);
         }
         void hurt() {
             *this->camera_state = CAMERA_RUMBLE;
@@ -396,11 +453,40 @@ class Player {
                 this->is_hurt=true;
             }
         }
+        char getFX() {
+            return(this->effect);
+        }
+        void setFXNormal() {
+            this->effect = PJ_FX_NORMAL;
+            this->set_normal_background();
+            this->resetAcceleration();
+        }
+        void setFXSpeed() {
+            this->effect = PJ_FX_SPEED;
+            this->set_normal_background();
+            this->acceleration = 0.09;
+        }
+        void setFXConfused() {
+            this->effect = PJ_FX_CONFUS;
+            this->set_normal_background();
+            this->resetAcceleration();
+        }
+        void setFXDeformation() {
+            this->effect = PJ_FX_DEFORM;
+            this->confus_timer = 0;
+            this->resetAcceleration();
+        }
         bn::fixed x() {
             return(this->sprite->x());
         }
         bn::fixed y() {
             return(this->sprite->y());
+        }
+        bn::fixed getSpeedX() {
+            return(this->speed_x);
+        }
+        bn::fixed getSpeedY() {
+            return(this->speed_y);
         }
         char getState() {
             return(this->state);
@@ -426,41 +512,56 @@ class Player {
         }
         
         void update() {
+            /*
+             * Player effect
+            */
+            if(this->effect == PJ_FX_DEFORM) {
+                if (this->confus_timer%BG_CONFUSION_RATE==0 && (this->speed_x != 0 || this->speed_y != 0)) {
+                    bn::bgs_mosaic::set_stretch(random->get_fixed(0.5,1));
+                    bn::blending::set_transparency_alpha(random->get_fixed(0,1));
+                }
+                this->confus_timer+=1;
+            }
+            this->bg_builder->set_position(-this->camera->x(), -this->camera->y());
+            *this->bg = this->bg_builder->build();
+
             bool left_collision = (lvl0_collisions(this->sprite->x()+this->speed_x, this->sprite->y(), *this->map_item)==1);
             bool right_collision = (lvl0_collisions(this->sprite->x()+this->speed_x, this->sprite->y(), *this->map_item)==1);
             bool up_collision = (lvl0_collisions(this->sprite->x(), this->sprite->y()+this->speed_y, *this->map_item)==1);
             bool down_collision = (lvl0_collisions(this->sprite->x(), this->sprite->y()+this->speed_y, *this->map_item)==1);
+            
 
-            if(bn::keypad::left_held() && !left_collision) {
+            if((bn::keypad::left_held() && !left_collision && this->effect != PJ_FX_CONFUS ) || (bn::keypad::right_held() && !left_collision && this->effect == PJ_FX_CONFUS)) {
                 if(this->speed_x >= -this->maxspeed) this->speed_x -= this->acceleration;
                 if(this->speed_x <= -this->maxspeed) this->speed_x += this->acceleration;
                 if(this->speed_x < 0) this->sprite->set_horizontal_flip(true);
             } 
-            else if(bn::keypad::right_held() && !right_collision) {
+            else if((bn::keypad::right_held() && !right_collision && this->effect != PJ_FX_CONFUS) || (bn::keypad::left_held() && !right_collision && this->effect == PJ_FX_CONFUS)) {
                 if(this->speed_x <= this->maxspeed) this->speed_x += this->acceleration;
                 if(this->speed_x >= this->maxspeed) this->speed_x -= this->acceleration;
                 if(this->speed_x > 0) this->sprite->set_horizontal_flip(false);
             }
             else {
                 if(this->speed_x < 0 && !left_collision)
-                    this->speed_x += this->acceleration*1.5;
+                    this->speed_x += this->acceleration;
                 if(this->speed_x > 0 && !right_collision)
-                    this->speed_x -= this->acceleration*1.5;
+                    this->speed_x -= this->acceleration;
+                if (abs(this->speed_x) < this->acceleration) this->speed_x=0;
             }
-            if(bn::keypad::up_held() && !up_collision) {
+            if((bn::keypad::up_held() && !up_collision && this->effect != PJ_FX_CONFUS) || (bn::keypad::down_held() && !up_collision && this->effect == PJ_FX_CONFUS)) {
                 if(this->speed_y >= -this->maxspeed) this->speed_y -= this->acceleration;
                 if(this->speed_y <= -this->maxspeed) this->speed_y += this->acceleration;
             }
-            else if(bn::keypad::down_held() && !down_collision) {
+            else if((bn::keypad::down_held() && !down_collision && this->effect != PJ_FX_CONFUS) || (bn::keypad::up_held() && !down_collision && this->effect == PJ_FX_CONFUS)) {
                 if(this->speed_y <= this->maxspeed) this->speed_y += this->acceleration;
                 if(this->speed_y >= this->maxspeed) this->speed_y -= this->acceleration;
             }
             else {
                 if(this->speed_y < 0 && !down_collision) 
-                    this->speed_y += this->acceleration*1.5;
-
+                    this->speed_y += this->acceleration;
                 if(this->speed_y > 0 && !up_collision) 
-                    this->speed_y -= this->acceleration*1.5;
+                    this->speed_y -= this->acceleration;
+                if (abs(this->speed_y) < this->acceleration) this->speed_y=0;
             }
 
             if(left_collision || right_collision) {
@@ -513,14 +614,12 @@ class Player {
 
             if(this->state == PJ_STATE_SWALLOWING) {
                 this->swallowing_timer += 1;
-                if(this->swallowing_timer >= PJ_EATING_ANIMATION_DELAY) {
+                if(this->swallowing_timer >= PJ_SWALLOW_ANIMATION_DELAY) {
                     this->setStateStand();
                 }
             }
 
             if(this->state == PJ_STATE_EATING) {
-                if(this->animation->done())
-                    this->animation = bn::create_sprite_animate_action_forever(*this->sprite, 32, bn::sprite_items::pj.tiles_item(), 4, 5, 6, 7);
                 this->eating_timer += 1;
                 if(this->eating_timer >= PJ_EATING_ANIMATION_DELAY) {
                     if(this->eaten == true)
@@ -549,7 +648,7 @@ class Player {
 // cam.x() - screen_width/2 cam.x() + screen_width/2
 
 Fish createFish(bn::camera_ptr& cam, bn::random& rand, bn::regular_bg_ptr& bg_item, bn::regular_bg_map_item& map) {
-    int type = rand.get_int(2);
+    int type = rand.get_int(5);
     bn::fixed x = rand.get_int(bg_item.dimensions().width())-bg_item.dimensions().width()/2;
     bn::fixed y = rand.get_int(bg_item.dimensions().height())-bg_item.dimensions().height()/2;
     switch(type) {
@@ -559,13 +658,21 @@ Fish createFish(bn::camera_ptr& cam, bn::random& rand, bn::regular_bg_ptr& bg_it
         case 1:
             return(SpeedFish(x, y, cam, rand, bg_item, map));
             break;
+        case 2:
+            return(ConfusionFish(x, y, cam, rand, bg_item, map));
+            break;
+        case 3:
+            return(DeformationFish(x, y, cam, rand, bg_item, map));
+            break;
+        case 4:
+            return(SuperFish(x, y, cam, rand, bg_item, map));
+            break;
         default:
             return(NormalFish(x, y, cam, rand, bg_item, map));
     }
 }
 
-int main()
-{
+int game() {
     bn::core::init();
 
     /*
@@ -638,24 +745,60 @@ int main()
     */
     bn::music_items::music.play(0.5);
 
-    #define FISH_NUMBER 50
+    #define FISH_NUMBER 20
     bn::vector<Fish, FISH_NUMBER> fish_list;
     for(char i = 0; i < FISH_NUMBER; i++) {
         fish_list.push_back(createFish(camera, random, lvl0, lvl0_map_item));
     }
+   
+    bn::bgs_mosaic::set_stretch(0);
+    bn::blending::set_transparency_alpha(1);
+    bn::regular_bg_builder builder(bn::regular_bg_items::lvl0);
+    builder.set_blending_enabled(true);
+    builder.set_mosaic_enabled(true);
+    lvl0 = builder.build();
+    //int a=0;
 
-    Player player = Player(0, 0, camera, camera_state, lvl0_map_item);
+    Player player = Player(0, 0, camera, camera_state, lvl0_map_item, lvl0, builder, random);
+
+    bn::string<11> str_state = "";
 
     while(true)
     {
-        
         for(char fish_index = 0; fish_index < fish_list.size(); fish_index++) {
             fish_list.at(fish_index).update();
             if(fish_list.at(fish_index).collision(player.x(), player.y()) && player.getState() == PJ_STATE_EATING && fish_list.at(fish_index).getState() == FISH_STATE_NORMAL) {
                 // Quand on avale un poisson
-                fish_list.at(fish_index).kill();
+                char type = fish_list.at(fish_index).getType();
+                switch(type) {
+                    case FISH_TYPE_DEFORMATION:
+                        player.setFXDeformation();
+                        str_state = "DEFORMATION";
+                        break;
+                        
+                    case FISH_TYPE_CONFUSION:
+                        player.setFXConfused();
+                            str_state = "CONFUSION";
+                        break;
+                        
+                    case FISH_TYPE_SPEED:
+                        player.setFXSpeed();
+                        str_state = "FULLSPEED";
+                        break;
+                        
+                    case FISH_TYPE_SUPER:
+                        player.setFXNormal();
+                        player.setFullLife();
+                        str_state = "";
+                        break;
+                        
+                    default:
+                        player.setFXNormal();
+                        str_state = "";
+                }
                 player.eat();
                 fish_points+=1;
+                fish_list.at(fish_index).kill();
             }
             if(fish_list.at(fish_index).getState() == FISH_STATE_DEAD) {
                 fish_list.erase(&fish_list.at(fish_index));
@@ -671,15 +814,17 @@ int main()
         player.update();
 
         update_affine_background(base_degrees_angle, attributes, attributes_hbe);
+
+        text_sprites.clear();        
         
-        text_sprites.clear();
         //text_generator.generate(0, -40, bn::to_string<32>(get_bgtile_at_pos(pj.x(),pj.y(),lvl0_map_item)), text_sprites);
         //text_generator.generate(0, 40, bn::to_string<32>(fish_list[0]->getX()), text_sprites);
         //text_generator.generate(0, -70, bn::to_string<32>(collision), text_sprites);
         //text_generator.generate(-110, -70, bn::to_string<32>(pj.x().integer() + 8*lvl0_map_item.dimensions().width()/2), text_sprites);
         
+        if (player.getFX()!=PJ_FX_NORMAL) text_generator.generate(0, GBA_SCREEN_HEIGHT/2-8, str_state, text_sprites);
 
-        text_generator.generate(GBA_SCREEN_WIDTH/2-8, GBA_SCREEN_HEIGHT/2-8, 
+        text_generator.generate(GBA_SCREEN_WIDTH/2-16, GBA_SCREEN_HEIGHT/2-8, 
                                 bn::to_string<32>(fish_points), text_sprites);
 
         update_camera_check_edge(camera, player.x(), player.y(), lvl0); //warning put just before bn::core:update()
@@ -695,9 +840,14 @@ int main()
         lifebar.set_tiles(bn::sprite_items::spr_lifebar.tiles_item().create_tiles(player.getLife())); //Lifebar update
 
         if(player.getLife() == 0) {
-            // GAME OVER
+            return(fish_points);
         }
 
         bn::core::update();
     }
+}
+
+int main()
+{
+    game();
 }
