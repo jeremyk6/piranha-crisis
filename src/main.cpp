@@ -29,6 +29,7 @@
 #include "bn_sprite_items_fish_deformation.h"
 #include "bn_sprite_items_fish_occoured.h"
 #include "bn_sprite_items_fish_confusion.h"
+#include "bn_sprite_items_fish_death.h"
 #include "bn_affine_bg_items_bg_soft.h"
 #include "bn_regular_bg_items_lvl0.h"
 #include "bn_music_items.h"
@@ -92,8 +93,9 @@
 #define FISH_TYPE_CONFUSION     2
 #define FISH_TYPE_DEFORMATION   3
 #define FISH_TYPE_SUPER         4
+#define FISH_TYPE_DEATH         5
 #define FISH_BOXSIZE 12
-#define SUPER_FISH_CHANCE 20
+#define SUPER_FISH_CHANCE 30
 
 #define FISH_STATE_APPEARING    0
 #define FISH_STATE_NORMAL       1
@@ -381,7 +383,14 @@ class SuperFish : public Fish {
         }
 };
 
-
+class DeathFish : public Fish {
+    public : 
+        DeathFish(bn::fixed init_x, bn::fixed init_y, bn::camera_ptr& cam, bn::random& rand, bn::regular_bg_ptr& bg_item, bn::regular_bg_map_item& map) : Fish(init_x, init_y, cam, rand, rand.get_fixed(0.5,1), rand.get_int(50,100), rand.get_int(50,100), bg_item, map) {
+            this->sprite = bn::sprite_items::fish_death.create_sprite(init_x, init_y);
+            this->animation = bn::create_sprite_animate_action_forever(*this->sprite, 4, bn::sprite_items::fish_death.tiles_item(), 0, 1, 2, 1);
+            this->type = FISH_TYPE_DEATH;
+        }
+};
 
 class Player {
     private :
@@ -448,11 +457,11 @@ class Player {
             if(this->life > 8) this->life = 8;
             bn::sound_items::eating.play(1);
         }
-        void hurt() {
+        void hurt(short hurt = 1) {
             *this->camera_state = CAMERA_RUMBLE;
             bn::sound_items::spike.play(1);
             if(this->is_hurt == false) {
-                this->life = this->life.round_integer() - 1;
+                this->life = this->life.round_integer() - hurt;
                 this->is_hurt=true;
             }
         }
@@ -655,7 +664,7 @@ Fish createFish(bn::camera_ptr& cam, bn::random& rand, bn::regular_bg_ptr& bg_it
     bn::fixed y = rand.get_int(bg_item.dimensions().height())-bg_item.dimensions().height()/2;
     
     int super = rand.get_int(SUPER_FISH_CHANCE);
-    if(super == 42) return(SuperFish(x, y, cam, rand, bg_item, map));
+    if(super == 7) return(SuperFish(x, y, cam, rand, bg_item, map));
 
     int type = rand.get_int(extend+1);
     switch(type) {
@@ -674,6 +683,12 @@ Fish createFish(bn::camera_ptr& cam, bn::random& rand, bn::regular_bg_ptr& bg_it
         default:
             return(NormalFish(x, y, cam, rand, bg_item, map));
     }
+}
+
+Fish createDeathFish(bn::camera_ptr& cam, bn::random& rand, bn::regular_bg_ptr& bg_item, bn::regular_bg_map_item& map) {
+    bn::fixed x = rand.get_int(bg_item.dimensions().width())-bg_item.dimensions().width()/2;
+    bn::fixed y = rand.get_int(bg_item.dimensions().height())-bg_item.dimensions().height()/2;
+    return(DeathFish(x, y, cam, rand, bg_item, map));
 }
 
 int game() {
@@ -756,7 +771,7 @@ int game() {
     */
     bn::music_items::music.play(0.5);
 
-    #define FISH_MAX_NUMBER 15
+    #define FISH_MAX_NUMBER 20
     bn::vector<Fish, FISH_MAX_NUMBER> fish_list;
     short fish_number = 5;
     char fish_type = FISH_TYPE_NORMAL;
@@ -785,7 +800,7 @@ int game() {
                         
                     case FISH_TYPE_CONFUSION:
                         player.setFXConfused();
-                            str_state = "CONFUSION";
+                        str_state = "CONFUSION";
                         break;
                         
                     case FISH_TYPE_SPEED:
@@ -798,7 +813,13 @@ int game() {
                         player.setFullLife();
                         str_state = "";
                         break;
-                        
+
+                    case FISH_TYPE_DEATH:
+                        player.setFXNormal();
+                        player.hurt(2);
+                        str_state = "";
+                        break;                        
+                    
                     default:
                         player.setFXNormal();
                         str_state = "";
@@ -816,7 +837,11 @@ int game() {
                 }
                 if(fish_points % 5 == 0) {
                     if(fish_number < FISH_MAX_NUMBER) fish_number++;
-                    if(fish_list.size() < fish_number) fish_list.push_back(createFish(camera, random, lvl0, lvl0_map_item, fish_type));
+                    if(fish_list.size() < fish_number)
+                    {
+                        if (fish_number < FISH_MAX_NUMBER/2) fish_list.push_back(createFish(camera, random, lvl0, lvl0_map_item, fish_type));
+                        else fish_list.push_back(createDeathFish(camera, random, lvl0, lvl0_map_item));
+                    }
                 }
             }
         }
